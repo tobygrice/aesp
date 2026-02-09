@@ -12,9 +12,18 @@ Cipher block chaining (CBC) mode is the simplest solution to the insecurity pres
 This means that each ciphertext block depends on all plaintext blocks that appear before it. This solves the pattern issue in ECB, but means that the encryption **must** be run serially. 
 
 ## CTR Mode
-Counter (CTR) mode turns AES from a block cipher to a stream cipher. You start with a counter = random number (nonce) then increment it for each new block.
-You then encrypt the *counter*, and XOR the result with the plaintext to produce the ciphertext. The diagram below explains this perfectly.
+Counter (CTR) mode turns AES from a block cipher to a stream cipher. You add an incrementing counter to an initialisation vector.
+You then encrypt the result of this *counter*, and XOR the result with the plaintext to produce the ciphertext. The diagram below illustrates this perfectly.
 
 ![[Pasted image 20260209110711.png]]
 https://en.wikipedia.org/wiki/Block_cipher_mode_of_operation
 
+The biggest challenge here is deciding on nonce/counter sizes. Most commonly, a 96 bit nonce/IV is used with a 32-bit counter. This gives $2^{32}$ unique values for counter, meaning a limit of $2^{32}$ blocks can be encrypted using that nonce. $2^{32}$ 16-byte blocks is exactly 64 GiB of data. 
+
+Whilst large enough for most uses, it is not uncommon that one may wish to encrypt more than 64 GiB of data. 
+
+This is why I considered a 64-bit nonce with a 64-bit counter. This is less commonly used, but allows for $2^{64}$ blocks to be encrypted, or roughly 262,000 petabytes of data -> essentially no practical limit on encryption input size. 
+
+I decided to implement a 32-bit counter / 96-bit nonce, because [[GCM for Message Authentication|GCM]] requires a 32 bit counter. 
+
+Modern implementations just generate a new IV when the 64GiB limit is reached. 

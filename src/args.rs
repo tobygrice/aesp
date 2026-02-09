@@ -25,6 +25,15 @@ pub enum Commands {
 #[derive(Args, Debug)]
 #[command(arg_required_else_help = true)]
 pub struct CommonArgs {
+    /// Mode of operation.
+    #[arg(
+        short = 'm',
+        long = "mode",
+        value_enum,
+        default_value_t = Mode::ModeECB, // change to gcm once implemented
+    )]
+    pub mode: Mode,
+
     /// Input file path.
     #[arg(short = 'i', long = "input")]
     pub input: PathBuf,
@@ -67,4 +76,14 @@ pub enum KeySize {
     Bits192,
     #[value(name = "256")]
     Bits256,
+}
+
+#[derive(Copy, Clone, Debug, ValueEnum)]
+pub enum Mode {
+    #[value(name = "ecb")]
+    ModeECB,
+    #[value(name = "ctr")]
+    ModeCTR,
+    #[value(name = "gcm")]
+    ModeGCM,
 }

@@ -21,6 +21,7 @@ fn aes_cli() -> aes::Result<()> {
             let input_path = enc.common.input; // move ownership
             let output_path = enc.common.output;
             let key_path = enc.common.key;
+            let mode = enc.common.mode;
 
             // read plaintext from input_path
             let plaintext = fs::read(input_path).expect("Failed to read input");
@@ -40,7 +41,12 @@ fn aes_cli() -> aes::Result<()> {
             };
 
             // encrypt plaintext and write output
-            let ciphertext = aes::encrypt(&plaintext, &key)?;
+            let ciphertext = match mode {
+                args::Mode::ModeECB => aes::encrypt(&plaintext, &key, aes::Mode::ModeECB)?,
+                args::Mode::ModeCTR => aes::encrypt(&plaintext, &key, aes::Mode::ModeCTR)?,
+                args::Mode::ModeGCM => aes::encrypt(&plaintext, &key, aes::Mode::ModeGCM)?,
+            };
+                
             fs::write(output_path, &ciphertext).expect("Failed to write output");
             Ok(())
         }
@@ -48,13 +54,19 @@ fn aes_cli() -> aes::Result<()> {
             let input_path = common.input; // move ownership
             let output_path = common.output;
             let key_path = common.key;
+            let mode = common.mode;
 
             // read inputs
             let ciphertext = fs::read(input_path).expect("Failed to read input");
             let key = fs::read(key_path).expect("Failed to read key");
 
             // decrypt ciphertext and write output
-            let plaintext = aes::decrypt(&ciphertext, &key)?;
+            let plaintext = match mode {
+                args::Mode::ModeECB => aes::decrypt(&ciphertext, &key, aes::Mode::ModeECB)?,
+                args::Mode::ModeCTR => aes::decrypt(&ciphertext, &key, aes::Mode::ModeCTR)?,
+                args::Mode::ModeGCM => aes::decrypt(&ciphertext, &key, aes::Mode::ModeGCM)?,
+            };
+            
             fs::write(output_path, &plaintext).expect("Failed to write output");
             Ok(())
         }

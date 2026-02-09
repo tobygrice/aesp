@@ -1,28 +1,9 @@
-use std::vec;
-
-use super::error::Result;
 use super::constants::SBOX_INV;
-use super::key::{add_round_key, expand_key};
-use super::util::{blockify, unpad, gf_mul};
+use super::key::add_round_key;
+use super::util::gf_mul;
 
-pub fn decrypt(ciphertext: &[u8], key: &[u8]) -> Result<Vec<u8>> {
-    let round_keys = expand_key(&key)?;
-    let ciphertext = blockify(ciphertext.to_vec())?;
 
-    let mut plaintext: Vec<u8> = vec![];
-    for block in ciphertext {
-        let mut dec_block = decrypt_block(&block, &round_keys)
-            .into_iter()
-            .flatten()
-            .collect();
-        plaintext.append(&mut dec_block);
-    }
-
-    unpad(&plaintext);
-    Ok(plaintext)
-}
-
-fn decrypt_block(plaintext: &[[u8; 4]; 4], round_keys: &[[[u8; 4]; 4]]) -> [[u8; 4]; 4] {
+pub(crate) fn decrypt_block(plaintext: &[[u8; 4]; 4], round_keys: &[[[u8; 4]; 4]]) -> [[u8; 4]; 4] {
     let mut state = plaintext.clone();
     let num_rounds = round_keys.len();
 
@@ -42,6 +23,7 @@ fn decrypt_block(plaintext: &[[u8; 4]; 4], round_keys: &[[[u8; 4]; 4]]) -> [[u8;
     state
 }
 
+#[inline]
 fn sub_bytes(state: &mut [[u8; 4]; 4]) {
     for word in state {
         for byte in word {
@@ -50,6 +32,7 @@ fn sub_bytes(state: &mut [[u8; 4]; 4]) {
     }
 }
 
+#[inline]
 fn shift_rows(state: &mut [[u8; 4]; 4]) {
     let s = *state;
     *state = [
@@ -60,6 +43,7 @@ fn shift_rows(state: &mut [[u8; 4]; 4]) {
     ];
 }
 
+#[inline]
 fn mix_columns(state: &mut [[u8; 4]; 4]) {
     for word in state {
         let a = *word; // make temp copy of word
@@ -72,8 +56,9 @@ fn mix_columns(state: &mut [[u8; 4]; 4]) {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use crate::aes_core::{encryption, decryption};
+    use crate::aes_core::error::Result;
+    use crate::aes_core::key::expand_key;
 
     #[test]
     fn test_shift_rows() {
@@ -148,11 +133,11 @@ mod tests {
         ];
 
         let round_keys = expand_key(&key)?;
-        let actual = encryption::encrypt_block(&plaintext, &round_keys);
-        let actual = decryption::decrypt_block(&actual, &round_keys);
+        let encrypted = encryption::encrypt_block(&plaintext, &round_keys);
+        let decrypted = decryption::decrypt_block(&encrypted, &round_keys);
 
         assert_eq!(
-            actual, plaintext,
+            decrypted, plaintext,
             "decrypt block does not exactly reverse encrypt block"
         );
 

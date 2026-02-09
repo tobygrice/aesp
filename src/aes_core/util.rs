@@ -4,6 +4,7 @@ use super::error::{Error, Result};
 // - adapted from https://crypto.stackexchange.com/a/71206
 // - unfortunately, Rust doesn't allow such pretty bit manipulation on u8s,
 //   so the translation is not as clean
+#[inline]
 pub(crate) fn gf_mul(mut a: u8, mut b: u8) -> u8 {
     let mut p: u8 = 0;
     while b > 0 {
@@ -51,7 +52,9 @@ pub(crate) fn unpad(plaintext: &[u8]) -> Vec<u8> {
 // this function was written with assistance of an LLM
 pub(crate) fn blockify(plaintext: Vec<u8>) -> Result<Vec<[[u8; 4]; 4]>> {
     if plaintext.len() % 16 != 0 {
-        return Err(Error::InvalidCiphertext { len: plaintext.len() });
+        return Err(Error::InvalidCiphertext {
+            len: plaintext.len(),
+        });
     }
 
     Ok(plaintext
@@ -66,6 +69,31 @@ pub(crate) fn blockify(plaintext: Vec<u8>) -> Result<Vec<[[u8; 4]; 4]>> {
         })
         .collect())
 }
+
+
+
+#[inline]
+pub(crate) fn ctr_block(iv: &[u8; 12], ctr: u32) -> [[u8; 4]; 4] {
+    let cb = ctr.to_be_bytes();
+    [
+        [iv[00], iv[01], iv[02], iv[03]],
+        [iv[04], iv[05], iv[06], iv[07]],
+        [iv[08], iv[09], iv[10], iv[11]],
+        [cb[00], cb[01], cb[02], cb[03]],
+    ]
+}
+
+#[inline]
+pub(crate) fn xor_block(keystream: [[u8; 4]; 4], chunk: &[u8]) -> Vec<u8> {
+    keystream
+        .iter()
+        .flatten()
+        .zip(chunk.iter())
+        .map(|(k, c)| k ^ c)
+        .collect()
+}
+
+
 
 #[cfg(test)]
 mod tests {
