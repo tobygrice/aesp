@@ -1,3 +1,6 @@
+use rand::TryRngCore;
+use rand::rngs::OsRng;
+
 use super::error::{Error, Result};
 
 // Multiplication in the Galois finite field GF(2^8)
@@ -26,6 +29,13 @@ pub(crate) fn gf_mul(mut a: u8, mut b: u8) -> u8 {
     p
 }
 
+#[inline]
+pub(crate) fn random_iv() -> Result<[u8; 12]> {
+    let mut iv = [0u8; 12];
+    OsRng.try_fill_bytes(&mut iv)?;
+    Ok(iv)
+}
+
 pub(crate) fn pad(plaintext: &[u8]) -> Vec<u8> {
     // PKCS#7: pad with number of elems to pad
     let mut res = plaintext.to_vec();
@@ -50,14 +60,15 @@ pub(crate) fn unpad(plaintext: &[u8]) -> Vec<u8> {
 }
 
 // this function was written with assistance of an LLM
-pub(crate) fn blockify(plaintext: Vec<u8>) -> Result<Vec<[[u8; 4]; 4]>> {
-    if plaintext.len() % 16 != 0 {
+pub(crate) fn blockify(input: Vec<u8>) -> Result<Vec<[[u8; 4]; 4]>> {
+    if input.len() % 16 != 0 {
         return Err(Error::InvalidCiphertext {
-            len: plaintext.len(),
+            len: input.len(),
+            context: "ECB: not a multiple of 16 bytes"
         });
     }
 
-    Ok(plaintext
+    Ok(input
         .chunks_exact(16)
         .map(|c| {
             [
@@ -69,8 +80,6 @@ pub(crate) fn blockify(plaintext: Vec<u8>) -> Result<Vec<[[u8; 4]; 4]>> {
         })
         .collect())
 }
-
-
 
 #[inline]
 pub(crate) fn ctr_block(iv: &[u8; 12], ctr: u32) -> [[u8; 4]; 4] {
@@ -92,8 +101,6 @@ pub(crate) fn xor_block(keystream: [[u8; 4]; 4], chunk: &[u8]) -> Vec<u8> {
         .map(|(k, c)| k ^ c)
         .collect()
 }
-
-
 
 #[cfg(test)]
 mod tests {
