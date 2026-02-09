@@ -30,7 +30,7 @@ pub struct CommonArgs {
         short = 'm',
         long = "mode",
         value_enum,
-        default_value_t = Mode::ModeECB, // change to gcm once implemented
+        default_value_t = Mode::ModeCTR, // change to gcm once implemented
     )]
     pub mode: Mode,
 

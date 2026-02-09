@@ -1,6 +1,6 @@
 use super::constants::SBOX;
 use super::key::add_round_key;
-use super::util::gf_mul;
+use super::util::dbl;
 
 pub(crate) fn encrypt_block(plaintext: &[[u8; 4]; 4], round_keys: &[[[u8; 4]; 4]]) -> [[u8; 4]; 4] {
     let mut state = plaintext.clone();
@@ -42,14 +42,15 @@ pub(crate) fn shift_rows(state: &mut [[u8; 4]; 4]) {
     ];
 }
 
+// optimisation by https://crypto.stackexchange.com/a/71206
 #[inline]
 pub(crate) fn mix_columns(state: &mut [[u8; 4]; 4]) {
     for word in state {
-        let a = *word; // make temp copy of word
-        word[0] = gf_mul(2, a[0]) ^ gf_mul(3, a[1]) ^ a[2] ^ a[3];
-        word[1] = a[0] ^ gf_mul(2, a[1]) ^ gf_mul(3, a[2]) ^ a[3];
-        word[2] = a[0] ^ a[1] ^ gf_mul(2, a[2]) ^ gf_mul(3, a[3]);
-        word[3] = gf_mul(3, a[0]) ^ a[1] ^ a[2] ^ gf_mul(2, a[3]);
+        let (a, b, c, d) = (word[0], word[1], word[2], word[3]);
+        word[0] = dbl(a ^ b) ^ b ^ c ^ d; /* 2a + 3b + c + d */
+        word[1] = dbl(b ^ c) ^ c ^ d ^ a; /* 2b + 3c + d + a */
+        word[2] = dbl(c ^ d) ^ d ^ a ^ b; /* 2c + 3d + a + b */
+        word[3] = dbl(d ^ a) ^ a ^ b ^ c; /* 2d + 3a + b + c */
     }
 }
 
@@ -193,5 +194,4 @@ mod tests {
 
         Ok(())
     }
-
 }

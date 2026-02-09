@@ -13,12 +13,12 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "Modes of Operation.md",
+                "file": "GCM for Message Authentication.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "Modes of Operation"
+              "title": "GCM for Message Authentication"
             }
           }
         ]
@@ -185,8 +185,8 @@
   },
   "active": "ac12d07a66d2030f",
   "lastOpenFiles": [
-    "GCM for Message Authentication.md",
     "Modes of Operation.md",
+    "GCM for Message Authentication.md",
     "Untitled.md",
     "Key Schedule.md",
     "Encryption.md",

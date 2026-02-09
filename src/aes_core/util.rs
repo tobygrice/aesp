@@ -3,30 +3,10 @@ use rand::rngs::OsRng;
 
 use super::error::{Error, Result};
 
-// Multiplication in the Galois finite field GF(2^8)
-// - adapted from https://crypto.stackexchange.com/a/71206
-// - unfortunately, Rust doesn't allow such pretty bit manipulation on u8s,
-//   so the translation is not as clean
-#[inline]
-pub(crate) fn gf_mul(mut a: u8, mut b: u8) -> u8 {
-    let mut p: u8 = 0;
-    while b > 0 {
-        if (b & 1) != 0 {
-            p ^= a; // add a to p if the lowest bit of b is set
-        }
-
-        // multiply a by 2 in the Galois finite field
-        // overflow -> reduce modulo GF(2^8) polynomial x^8 + x^4 + x^3 + x + 1
-        // ^= 0x1B after shifting
-        let hi = a & 0x80;
-        a <<= 1; // multiply by 2
-        if hi != 0 {
-            a ^= 0x1B; // reduce if overflow
-        }
-
-        b >>= 1;
-    }
-    p
+// adapted from https://crypto.stackexchange.com/a/71206
+#[inline(always)]
+pub(crate) fn dbl(a: u8) -> u8 {
+    (a << 1) ^ (0x1B & (0u8).wrapping_sub((a >> 7) & 1))
 }
 
 #[inline]
@@ -64,7 +44,7 @@ pub(crate) fn blockify(input: Vec<u8>) -> Result<Vec<[[u8; 4]; 4]>> {
     if input.len() % 16 != 0 {
         return Err(Error::InvalidCiphertext {
             len: input.len(),
-            context: "ECB: not a multiple of 16 bytes"
+            context: "ECB: not a multiple of 16 bytes",
         });
     }
 

@@ -44,20 +44,16 @@ pub(crate) fn ctr(input: &[u8], key: &[u8], iv: &[u8; 12], ctr_start: u32) -> Re
     let mut output: Vec<u8> = Vec::with_capacity(input.len());
     let mut ctr = ctr_start; // mostly used for testing, in practice always start at 0
 
-    // calculate the total number of blocks required for the input size
-    // if exceeds 2^32, counter overflow error
-    let num_blocks = ((input.len() + 15) / 16) as u64;
-    if num_blocks > u32::MAX as u64 {
-        return Err(Error::CounterOverflow);
-    }
-
     for chunk in input.chunks(16) {
         let block = ctr_block(iv, ctr); // form block from iv + ctr
         // encrypt block
         let keystream = encrypt_block(&block, &round_keys);
         // xor each element of chunk (1-16 bytes) with corresponding elem in keystream
         output.extend_from_slice(&xor_block(keystream, chunk));
-        ctr = ctr.wrapping_add(1); // acceptable because we confirm above that ctr will never be reused
+        ctr = match ctr.checked_add(1) {
+            Some(c) => c,
+            None => return Err(Error::CounterOverflow)
+        };
     }
 
     Ok(output)

@@ -1,7 +1,6 @@
 use super::constants::SBOX_INV;
 use super::key::add_round_key;
-use super::util::gf_mul;
-
+use super::util::dbl;
 
 pub(crate) fn decrypt_block(plaintext: &[[u8; 4]; 4], round_keys: &[[[u8; 4]; 4]]) -> [[u8; 4]; 4] {
     let mut state = plaintext.clone();
@@ -10,21 +9,21 @@ pub(crate) fn decrypt_block(plaintext: &[[u8; 4]; 4], round_keys: &[[[u8; 4]; 4]
     add_round_key(&mut state, &round_keys.last().unwrap());
 
     for round_key in round_keys[1..num_rounds - 1].iter().rev() {
-        shift_rows(&mut state);
-        sub_bytes(&mut state);
+        shift_rows_inv(&mut state);
+        sub_bytes_inv(&mut state);
         add_round_key(&mut state, round_key);
-        mix_columns(&mut state);
+        mix_columns_inv(&mut state);
     }
 
-    shift_rows(&mut state);
-    sub_bytes(&mut state);
+    shift_rows_inv(&mut state);
+    sub_bytes_inv(&mut state);
     add_round_key(&mut state, &round_keys[0]);
 
     state
 }
 
 #[inline]
-fn sub_bytes(state: &mut [[u8; 4]; 4]) {
+fn sub_bytes_inv(state: &mut [[u8; 4]; 4]) {
     for word in state {
         for byte in word {
             *byte = SBOX_INV[*byte as usize];
@@ -33,7 +32,7 @@ fn sub_bytes(state: &mut [[u8; 4]; 4]) {
 }
 
 #[inline]
-fn shift_rows(state: &mut [[u8; 4]; 4]) {
+fn shift_rows_inv(state: &mut [[u8; 4]; 4]) {
     let s = *state;
     *state = [
         [s[0][0], s[3][1], s[2][2], s[1][3]],
@@ -43,22 +42,26 @@ fn shift_rows(state: &mut [[u8; 4]; 4]) {
     ];
 }
 
+// optimisation by https://crypto.stackexchange.com/a/71206
 #[inline]
-fn mix_columns(state: &mut [[u8; 4]; 4]) {
+fn mix_columns_inv(state: &mut [[u8; 4]; 4]) {
     for word in state {
-        let a = *word; // make temp copy of word
-        word[0] = gf_mul(0xe, a[0]) ^ gf_mul(0xb, a[1]) ^ gf_mul(0xd, a[2]) ^ gf_mul(0x9, a[3]);
-        word[1] = gf_mul(0x9, a[0]) ^ gf_mul(0xe, a[1]) ^ gf_mul(0xb, a[2]) ^ gf_mul(0xd, a[3]);
-        word[2] = gf_mul(0xd, a[0]) ^ gf_mul(0x9, a[1]) ^ gf_mul(0xe, a[2]) ^ gf_mul(0xb, a[3]);
-        word[3] = gf_mul(0xb, a[0]) ^ gf_mul(0xd, a[1]) ^ gf_mul(0x9, a[2]) ^ gf_mul(0xe, a[3]);
+        let (a, b, c, d) = (word[0], word[1], word[2], word[3]);
+        let x = dbl(a ^ b ^ c ^ d);
+        let y = dbl(x ^ a ^ c);
+        let z = dbl(x ^ b ^ d);
+        word[0] = dbl(y ^ a ^ b) ^ b ^ c ^ d; /* 14a + 11b + 13c + 9d */
+        word[1] = dbl(z ^ b ^ c) ^ c ^ d ^ a; /* 14b + 11c + 13d + 9a */
+        word[2] = dbl(y ^ c ^ d) ^ d ^ a ^ b; /* 14c + 11d + 13a + 9b */
+        word[3] = dbl(z ^ d ^ a) ^ a ^ b ^ c; /* 14d + 11a + 13b + 9c */
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::aes_core::{encryption, decryption};
     use crate::aes_core::error::Result;
     use crate::aes_core::key::expand_key;
+    use crate::aes_core::{decryption, encryption};
 
     #[test]
     fn test_shift_rows() {
@@ -71,7 +74,7 @@ mod tests {
         let expected = actual;
 
         encryption::shift_rows(&mut actual);
-        decryption::shift_rows(&mut actual);
+        decryption::shift_rows_inv(&mut actual);
 
         assert_eq!(
             actual, expected,
@@ -90,7 +93,7 @@ mod tests {
         let expected = actual;
 
         encryption::sub_bytes(&mut actual);
-        decryption::sub_bytes(&mut actual);
+        decryption::sub_bytes_inv(&mut actual);
 
         assert_eq!(
             actual, expected,
@@ -109,7 +112,7 @@ mod tests {
         let expected = actual;
 
         encryption::mix_columns(&mut actual);
-        decryption::mix_columns(&mut actual);
+        decryption::mix_columns_inv(&mut actual);
 
         assert_eq!(
             actual, expected,

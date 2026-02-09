@@ -4,6 +4,7 @@ use args::{Cli, Commands};
 use clap::Parser;
 
 use std::fs;
+use std::time::Instant;
 
 fn main() {
     if let Err(e) = aes_cli() {
@@ -40,14 +41,23 @@ fn aes_cli() -> aes::Result<()> {
                 fs::read(key_path).expect("Failed to read key")
             };
 
+            let start = Instant::now();
+
             // encrypt plaintext and write output
             let ciphertext = match mode {
                 args::Mode::ModeECB => aes::encrypt(&plaintext, &key, aes::Mode::ModeECB)?,
                 args::Mode::ModeCTR => aes::encrypt(&plaintext, &key, aes::Mode::ModeCTR)?,
                 args::Mode::ModeGCM => aes::encrypt(&plaintext, &key, aes::Mode::ModeGCM)?,
             };
-                
+
+            let duration = start.elapsed();
+
             fs::write(output_path, &ciphertext).expect("Failed to write output");
+            println!(
+                "Encrypted {} bytes in {} ms",
+                plaintext.len(),
+                duration.as_millis()
+            );
             Ok(())
         }
         Commands::Decrypt(common) => {
@@ -60,14 +70,25 @@ fn aes_cli() -> aes::Result<()> {
             let ciphertext = fs::read(input_path).expect("Failed to read input");
             let key = fs::read(key_path).expect("Failed to read key");
 
+            let start = Instant::now();
+
             // decrypt ciphertext and write output
             let plaintext = match mode {
                 args::Mode::ModeECB => aes::decrypt(&ciphertext, &key, aes::Mode::ModeECB)?,
                 args::Mode::ModeCTR => aes::decrypt(&ciphertext, &key, aes::Mode::ModeCTR)?,
                 args::Mode::ModeGCM => aes::decrypt(&ciphertext, &key, aes::Mode::ModeGCM)?,
             };
-            
+
+            let duration = start.elapsed();
+
             fs::write(output_path, &plaintext).expect("Failed to write output");
+
+            println!(
+                "Decrypted {} bytes in {} ms",
+                plaintext.len(),
+                duration.as_millis()
+            );
+
             Ok(())
         }
     }
