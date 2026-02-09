@@ -1,6 +1,6 @@
 mod args;
 
-use args::{Cli, Commands, KeySize};
+use args::{Cli, Commands};
 use clap::Parser;
 
 use std::fs;
@@ -8,7 +8,7 @@ use std::fs;
 fn main() {
     if let Err(e) = aes_cli() {
         eprintln!("error: {e}");
-        std::process::exit(1);
+        //std::process::exit(1);
     }
 }
 
@@ -18,9 +18,9 @@ fn aes_cli() -> aes::Result<()> {
     match args.command {
         Commands::Encrypt(enc) => {
             // common args:
-            let input_path = &enc.common.input;
-            let output_path = &enc.common.output;
-            let key_path = &enc.common.key;
+            let input_path = enc.common.input; // move ownership
+            let output_path = enc.common.output;
+            let key_path = enc.common.key;
 
             // read plaintext from input_path
             let plaintext = fs::read(input_path).expect("Failed to read input");
@@ -28,9 +28,9 @@ fn aes_cli() -> aes::Result<()> {
             // read or generate key
             let key = if enc.gen_key {
                 let rand_key = match enc.key_size {
-                    KeySize::Bits128 => aes::random_key(aes::KeySize::Bits128)?,
-                    KeySize::Bits192 => aes::random_key(aes::KeySize::Bits192)?,
-                    KeySize::Bits256 => aes::random_key(aes::KeySize::Bits256)?,
+                    args::KeySize::Bits128 => aes::random_key(aes::KeySize::Bits128)?,
+                    args::KeySize::Bits192 => aes::random_key(aes::KeySize::Bits192)?,
+                    args::KeySize::Bits256 => aes::random_key(aes::KeySize::Bits256)?,
                 };
                 fs::write(key_path, &rand_key).expect("Failed to write key");
                 rand_key
@@ -45,9 +45,9 @@ fn aes_cli() -> aes::Result<()> {
             Ok(())
         }
         Commands::Decrypt(common) => {
-            let input_path = &common.input;
-            let output_path = &common.output;
-            let key_path = &common.key;
+            let input_path = common.input; // move ownership
+            let output_path = common.output;
+            let key_path = common.key;
 
             // read inputs
             let ciphertext = fs::read(input_path).expect("Failed to read input");
