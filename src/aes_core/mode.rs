@@ -2,7 +2,7 @@ use super::decryption::decrypt_block;
 use super::encryption::encrypt_block;
 use super::error::*;
 use super::key::expand_key;
-use super::util::{blockify, blockify_pad, ctr_block, unpad, xor_block};
+use super::util::{blockify, blockify_pad, ctr_block, flatten_block, gf_mul, unpad, xor_chunks};
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub enum Mode {
@@ -13,7 +13,7 @@ pub enum Mode {
 
 pub(crate) fn encrypt_ecb(plaintext: &[u8], key: &[u8]) -> Result<Vec<u8>> {
     let round_keys = expand_key(key)?;
-    let plaintext = blockify_pad(plaintext);
+    let plaintext = blockify_pad(plaintext, true);
 
     let mut ciphertext: Vec<u8> = Vec::with_capacity(plaintext.len() * 16);
     for block in plaintext {
@@ -39,25 +39,94 @@ pub(crate) fn decrypt_ecb(ciphertext: &[u8], key: &[u8]) -> Result<Vec<u8>> {
 }
 
 pub(crate) fn ctr(input: &[u8], key: &[u8], iv: &[u8; 12], ctr_start: u32) -> Result<Vec<u8>> {
-    let round_keys: Vec<[[u8; 4]; 4]> = expand_key(&key)?;
-    let mut output: Vec<u8> = Vec::with_capacity(input.len());
+    let round_keys = expand_key(&key)?;
+    let mut output = Vec::with_capacity(input.len());
     let mut ctr = ctr_start; // mostly used for testing, in practice always start at 0
 
     for chunk in input.chunks(16) {
         let block = ctr_block(iv, ctr); // form block from iv + ctr
         // encrypt block
-        let keystream = encrypt_block(&block, &round_keys);
         // xor each element of chunk (1-16 bytes) with corresponding elem in keystream
-        output.extend_from_slice(&xor_block(keystream, chunk));
+        let keystream = flatten_block(encrypt_block(&block, &round_keys));
+        let ct = xor_chunks(&keystream, chunk);
+        output.extend_from_slice(&ct[..chunk.len()]);
         ctr = match ctr.checked_add(1) {
             Some(c) => c,
-            None => return Err(Error::CounterOverflow)
+            None => return Err(Error::CounterOverflow),
         };
     }
 
     Ok(output)
 }
 
+/*
+H = 128 0s encrypted with key
+Start with Y = 0
+For each 16-byte block B:
+    Y = (Y XOR B) multiplied by H
+
+The blocks are:
+    All AAD blocks (padded)
+    All ciphertext blocks (padded)
+    One final length block
+*/
+
+// message structure: iv (96 bits) || aad len (32 bits) || aad || ciphertext || tag (128 bits)
+pub(crate) fn gcm(
+    input: &[u8],
+    key: &[u8],
+    iv: &[u8; 12],
+    aad: &[u8],
+) -> Result<(Vec<u8>, [u8; 16])> {
+    let round_keys = expand_key(&key)?;
+    let mut output = Vec::with_capacity(input.len());
+
+    // create inital ctr block (xor'd with tag at end)
+    let mut ctr: u32 = 1; 
+    let j0 = ctr_block(iv, ctr); // form block from iv + ctr
+    let j0_e = flatten_block(encrypt_block(&j0, &round_keys));
+    ctr += 1;
+
+    // generate H by encrypting block of 0s
+    let h = flatten_block(encrypt_block(&[[0u8; 4]; 4], &round_keys));
+    let mut tag = [0u8; 16];
+
+    // compute tag over AAD
+    for aad_chunk in aad.chunks(16) {
+        tag = gf_mul(xor_chunks(&tag, aad_chunk), h);
+    }
+
+    // encryption
+    for chunk in input.chunks(16) {
+        let block = ctr_block(iv, ctr); // form block from iv + ctr
+        // encrypt block
+        // xor each element of chunk (1-16 bytes) with corresponding elem in keystream
+        let keystream = flatten_block(encrypt_block(&block, &round_keys));
+        let ct = xor_chunks(&keystream, chunk);
+        
+        // update tag
+        tag = gf_mul(xor_chunks(&tag, &ct), h);
+
+        // update output and increment ctr
+        output.extend_from_slice(&ct[..chunk.len()]);
+        ctr = match ctr.checked_add(1) {
+            Some(c) => c,
+            None => return Err(Error::CounterOverflow),
+        };
+    }
+    // ... end encryption
+    
+    // authenticate len
+    let aad_bits = (aad.len() as u64) * 8;
+    let ct_bits  = (input.len() as u64) * 8;
+    let mut len_block = [0u8; 16];
+    len_block[..8].copy_from_slice(&aad_bits.to_be_bytes());
+    len_block[8..].copy_from_slice(&ct_bits.to_be_bytes());
+
+    tag = gf_mul(xor_chunks(&tag, &len_block), h);
+    tag = xor_chunks(&tag, &j0_e);
+    Ok((output, tag))
+}
 
 #[cfg(test)]
 mod tests {

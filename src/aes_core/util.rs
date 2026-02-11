@@ -47,7 +47,7 @@ pub(crate) fn blockify(input: &[u8]) -> Result<Vec<[[u8; 4]; 4]>> {
 }
 
 // this function was written with assistance of an LLM
-pub(crate) fn blockify_pad(input: &[u8]) -> Vec<[[u8; 4]; 4]> {
+pub(crate) fn blockify_pad(input: &[u8], pkcs7: bool) -> Vec<[[u8; 4]; 4]> {
     let pad_len = (16 - (input.len() % 16)) as u8; // 16 if rem == 0
     let total_bytes = input.len() + pad_len as usize;
 
@@ -64,7 +64,8 @@ pub(crate) fn blockify_pad(input: &[u8]) -> Vec<[[u8; 4]; 4]> {
     }
 
     let r = chunks.remainder(); // len = rem (0..15)
-    let mut last = [[pad_len; 4]; 4]; // pre-fill with padding bytes
+    let mut last = if pkcs7 { [[pad_len; 4]; 4] } else { [[0u8; 4]; 4] };
+        // pre-fill with padding bytes
 
     for (i, &b) in r.iter().enumerate() {
         last[i / 4][i % 4] = b;
@@ -85,15 +86,51 @@ pub(crate) fn ctr_block(iv: &[u8; 12], ctr: u32) -> [[u8; 4]; 4] {
     ]
 }
 
+
 #[inline(always)]
-pub(crate) fn xor_block(keystream: [[u8; 4]; 4], chunk: &[u8]) -> Vec<u8> {
-    keystream
-        .iter()
-        .flatten()
-        .zip(chunk.iter())
-        .map(|(k, c)| k ^ c)
-        .collect()
+pub(crate) fn xor_chunks(y: &[u8; 16], chunk: &[u8]) -> [u8; 16] {
+    let mut out: [u8; 16] = *y;
+    for i in 0..chunk.len() {
+        out[i] ^= chunk[i];
+    }
+    out
 }
+
+#[inline(always)]
+pub(crate) fn flatten_block(b: [[u8; 4]; 4]) -> [u8; 16] {
+    [
+        b[0][0], b[0][1], b[0][2], b[0][3],
+        b[1][0], b[1][1], b[1][2], b[1][3],
+        b[2][0], b[2][1], b[2][2], b[2][3],
+        b[3][0], b[3][1], b[3][2], b[3][3],
+    ]
+}
+
+// written by an LLM!
+#[inline(always)]
+pub(crate) fn gf_mul(tag: [u8; 16], h: [u8; 16]) -> [u8; 16] {
+    const R: u128 = 0xE100_0000_0000_0000_0000_0000_0000_0000;
+
+    let x = u128::from_be_bytes(tag);
+    let mut v = u128::from_be_bytes(h);
+    let mut z: u128 = 0;
+
+    // Process x bits from MSB -> LSB
+    for i in 0..128 {
+        let bit = (x >> (127 - i)) & 1;
+        // If bit == 1, z ^= v (branchless)
+        z ^= v & (0u128.wrapping_sub(bit));
+
+        // v = v >> 1; if LSB was 1, v ^= R
+        let lsb = v & 1;
+        v >>= 1;
+        v ^= R & (0u128.wrapping_sub(lsb));
+    }
+
+    z.to_be_bytes()
+}
+
+
 
 #[cfg(test)]
 mod tests {
@@ -125,7 +162,7 @@ mod tests {
             ],
         ];
 
-        let actual = blockify_pad(&plaintext);
+        let actual = blockify_pad(&plaintext, true);
 
         assert_eq!(actual, expected);
     }
