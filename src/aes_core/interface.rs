@@ -6,8 +6,8 @@ pub fn encrypt_ecb(plaintext: &[u8], key: &[u8]) -> Result<Vec<u8>> {
     encrypt_ecb_core(plaintext, key)
 }
 
-pub fn decrypt_ecb(plaintext: &[u8], key: &[u8]) -> Result<Vec<u8>> {
-    decrypt_ecb_core(plaintext, key)
+pub fn decrypt_ecb(ciphertext: &[u8], key: &[u8]) -> Result<Vec<u8>> {
+    decrypt_ecb_core(ciphertext, key)
 }
 
 pub fn encrypt_ctr(plaintext: &[u8], key: &[u8]) -> Result<Vec<u8>> {
