@@ -6,14 +6,30 @@ use clap::Parser;
 use std::fs;
 use std::time::Instant;
 
+use thiserror::Error;
+
+#[derive(Debug, Error)]
+pub enum CliError {
+    #[error("--aad is only valid with --mode gcm")]
+    AadInvalidMode,
+
+    #[error("invalid --aad hex: {0}")]
+    AadInvalidHex(#[from] std::num::ParseIntError),
+
+    #[error(transparent)]
+    Io(#[from] std::io::Error),
+
+    #[error(transparent)]
+    Aes(#[from] aes::Error),
+}
+
 fn main() {
     if let Err(e) = aes_cli() {
         eprintln!("error: {e}");
-        //std::process::exit(1);
     }
 }
 
-fn aes_cli() -> aes::Result<()> {
+fn aes_cli() -> Result<(), CliError> {
     let args = Cli::parse();
 
     match args.command {
@@ -25,7 +41,7 @@ fn aes_cli() -> aes::Result<()> {
             let mode = enc.common.mode;
 
             // read plaintext from input_path
-            let plaintext = fs::read(input_path).expect("Failed to read input");
+            let plaintext = fs::read(input_path)?;
 
             // read or generate key
             let key = if enc.gen_key {
@@ -34,25 +50,36 @@ fn aes_cli() -> aes::Result<()> {
                     args::KeySize::Bits192 => aes::random_key(aes::KeySize::Bits192)?,
                     args::KeySize::Bits256 => aes::random_key(aes::KeySize::Bits256)?,
                 };
-                fs::write(key_path, &rand_key).expect("Failed to write key");
+                fs::write(key_path, &rand_key)?;
                 rand_key
             } else {
                 // read key from key_path
-                fs::read(key_path).expect("Failed to read key")
+                fs::read(key_path)?
+            };
+
+            // parse AAD
+            let aad: Vec<u8> = match enc.aad {
+                Some(aad_str) => {
+                    if mode != args::Mode::ModeGCM {
+                        return Err(CliError::AadInvalidMode);
+                    }
+                    parse_aad(&aad_str)?
+                }
+                None => Vec::new(),
             };
 
             let start = Instant::now();
 
             // encrypt plaintext and write output
             let ciphertext = match mode {
-                args::Mode::ModeECB => aes::encrypt(&plaintext, &key, aes::Mode::ModeECB)?,
-                args::Mode::ModeCTR => aes::encrypt(&plaintext, &key, aes::Mode::ModeCTR)?,
-                args::Mode::ModeGCM => aes::encrypt(&plaintext, &key, aes::Mode::ModeGCM)?,
+                args::Mode::ModeECB => aes::encrypt_ecb(&plaintext, &key)?,
+                args::Mode::ModeCTR => aes::encrypt_ctr(&plaintext, &key)?,
+                args::Mode::ModeGCM => aes::encrypt_gcm(&plaintext, &key, &aad)?,
             };
 
             let duration = start.elapsed();
 
-            fs::write(output_path, &ciphertext).expect("Failed to write output");
+            fs::write(output_path, &ciphertext)?;
             println!(
                 "Encrypted {} bytes in {} ms",
                 plaintext.len(),
@@ -67,21 +94,32 @@ fn aes_cli() -> aes::Result<()> {
             let mode = common.mode;
 
             // read inputs
-            let ciphertext = fs::read(input_path).expect("Failed to read input");
-            let key = fs::read(key_path).expect("Failed to read key");
+            let ciphertext = fs::read(input_path)?;
+            let key = fs::read(key_path)?;
 
             let start = Instant::now();
 
             // decrypt ciphertext and write output
-            let plaintext = match mode {
-                args::Mode::ModeECB => aes::decrypt(&ciphertext, &key, aes::Mode::ModeECB)?,
-                args::Mode::ModeCTR => aes::decrypt(&ciphertext, &key, aes::Mode::ModeCTR)?,
-                args::Mode::ModeGCM => aes::decrypt(&ciphertext, &key, aes::Mode::ModeGCM)?,
+            let (plaintext, aad) = match mode {
+                args::Mode::ModeECB => (aes::decrypt_ecb(&ciphertext, &key)?, None),
+                args::Mode::ModeCTR => (aes::decrypt_ctr(&ciphertext, &key)?, None),
+                args::Mode::ModeGCM => aes::decrypt_gcm(&ciphertext, &key)?,
             };
 
             let duration = start.elapsed();
 
-            fs::write(output_path, &plaintext).expect("Failed to write output");
+            fs::write(output_path, &plaintext)?;
+
+            match aad {
+                Some(aad) => {
+                    print!("AAD = ");
+                    for b in &aad {
+                        print!("{:02x}", b);
+                    }
+                    println!();
+                }
+                None => {}
+            }
 
             println!(
                 "Decrypted {} bytes in {} ms",
@@ -92,4 +130,18 @@ fn aes_cli() -> aes::Result<()> {
             Ok(())
         }
     }
+}
+
+// parse_aad written with LLM assistance:
+fn parse_aad(s: &str) -> Result<Vec<u8>, std::num::ParseIntError> {
+    let mut hex: String = s.chars().filter(|c| !c.is_whitespace()).collect();
+
+    if hex.len() % 2 == 1 {
+        hex.insert(0, '0');
+    }
+
+    (0..hex.len())
+        .step_by(2)
+        .map(|i| u8::from_str_radix(&hex[i..i + 2], 16))
+        .collect::<Result<Vec<u8>, _>>()
 }

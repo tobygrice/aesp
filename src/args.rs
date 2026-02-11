@@ -1,9 +1,15 @@
 use clap::{Args, Parser, Subcommand, ValueEnum};
 use std::path::PathBuf;
 
-/** 
- * Argument parser using clap 
- */
+// AAD design plan, all optional flags:
+// ENCRYPT:
+//  --aad-file filepath
+//  --aad-hex <hex>
+// 
+// DECRYPT:
+//  --aad-file filepath : writes aad here if present
+//                        if aad present and aad-file not provided, aad is printed to stdout
+ 
 
 #[derive(Parser, Debug)]
 #[command(version, about, author, arg_required_else_help = true)]
@@ -11,7 +17,6 @@ pub struct Cli {
     #[command(subcommand)]
     pub command: Commands,
 }
-
 
 #[derive(Subcommand, Debug)]
 pub enum Commands {
@@ -22,6 +27,7 @@ pub enum Commands {
     Decrypt(CommonArgs),
 }
 
+
 #[derive(Args, Debug)]
 #[command(arg_required_else_help = true)]
 pub struct CommonArgs {
@@ -30,7 +36,7 @@ pub struct CommonArgs {
         short = 'm',
         long = "mode",
         value_enum,
-        default_value_t = Mode::ModeCTR, // change to gcm once implemented
+        default_value_t = Mode::ModeGCM,
     )]
     pub mode: Mode,
 
@@ -45,8 +51,8 @@ pub struct CommonArgs {
     /// Key file path.
     #[arg(short = 'k', long = "key")]
     pub key: PathBuf,
-}
 
+}
 
 #[derive(Args, Debug)]
 #[command(arg_required_else_help = true)]
@@ -66,9 +72,13 @@ pub struct EncryptArgs {
         requires = "gen_key"
     )]
     pub key_size: KeySize,
+
+    /// Additional authenticated data, provided as hex string (optional, GCM only)
+    #[arg(long = "aad", value_name = "HEX")]
+    pub aad: Option<String>,
 }
 
-#[derive(Copy, Clone, Debug, ValueEnum)]
+#[derive(Copy, Clone, Debug, ValueEnum, Eq, PartialEq)]
 pub enum KeySize {
     #[value(name = "128")]
     Bits128,
@@ -78,7 +88,7 @@ pub enum KeySize {
     Bits256,
 }
 
-#[derive(Copy, Clone, Debug, ValueEnum)]
+#[derive(Copy, Clone, Debug, ValueEnum, Eq, PartialEq)]
 pub enum Mode {
     #[value(name = "ecb")]
     ModeECB,

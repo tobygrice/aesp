@@ -2,7 +2,7 @@
 name = "aes"
 version = "0.1.0"
 authors = ["Toby Grice"]
-description = "AES encryption/decryption tool."
+description = "AES encryption/decryption tool | Toby Grice"
 edition = "2024"
 
 

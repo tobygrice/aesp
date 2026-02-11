@@ -5,8 +5,8 @@ Planned features:
 - [x] CLI using clap, supporting random key generation for encryption
 - [x] Robust library error handling using `thiserror` crate
 - [x] Counter mode of operation (CTR)
-- [x] Galois counter mode (GCM)
-- [ ] GCM with AAD
+- [x] Galois/counter mode (GCM) for message authentication
+- [x] GCM with AAD
 - [ ] Encryption and decryption in parallel
 
 ## Usage
@@ -30,11 +30,13 @@ Encrypt input to output
 Usage: aes.exe encrypt [OPTIONS] --input <INPUT> --output <OUTPUT> --key <KEY>
 
 Options:
+  -m, --mode <MODE>          Mode of operation [default: gcm] [possible values: ecb, ctr, gcm]
   -i, --input <INPUT>        Input file path
   -o, --output <OUTPUT>      Output file path
   -k, --key <KEY>            Key file path
       --gen-key              Generate a random key (written to path specified by key)
       --key-size <KEY_SIZE>  Only valid with --gen-key [default: 256] [possible values: 128, 192, 256]
+      --aad <HEX>            Additional authenticated data, provided as hex string (optional, GCM only)
   -h, --help                 Print help
 ```
 

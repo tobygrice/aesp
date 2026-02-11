@@ -4,14 +4,7 @@ use super::error::*;
 use super::key::expand_key;
 use super::util::{blockify, blockify_pad, ctr_block, flatten_block, gf_mul, unpad, xor_chunks};
 
-#[derive(Copy, Clone, Debug, Eq, PartialEq)]
-pub enum Mode {
-    ModeECB,
-    ModeCTR,
-    ModeGCM,
-}
-
-pub(crate) fn encrypt_ecb(plaintext: &[u8], key: &[u8]) -> Result<Vec<u8>> {
+pub(crate) fn encrypt_ecb_core(plaintext: &[u8], key: &[u8]) -> Result<Vec<u8>> {
     let round_keys = expand_key(key)?;
     let plaintext = blockify_pad(plaintext, true);
 
@@ -24,7 +17,7 @@ pub(crate) fn encrypt_ecb(plaintext: &[u8], key: &[u8]) -> Result<Vec<u8>> {
     Ok(ciphertext)
 }
 
-pub(crate) fn decrypt_ecb(ciphertext: &[u8], key: &[u8]) -> Result<Vec<u8>> {
+pub(crate) fn decrypt_ecb_core(ciphertext: &[u8], key: &[u8]) -> Result<Vec<u8>> {
     let round_keys = expand_key(key)?;
     let ciphertext = blockify(ciphertext)?;
 
@@ -38,7 +31,7 @@ pub(crate) fn decrypt_ecb(ciphertext: &[u8], key: &[u8]) -> Result<Vec<u8>> {
     Ok(plaintext)
 }
 
-pub(crate) fn ctr(input: &[u8], key: &[u8], iv: &[u8; 12], ctr_start: u32) -> Result<Vec<u8>> {
+pub(crate) fn ctr_core(input: &[u8], key: &[u8], iv: &[u8; 12], ctr_start: u32) -> Result<Vec<u8>> {
     let round_keys = expand_key(&key)?;
     let mut output = Vec::with_capacity(input.len());
     let mut ctr = ctr_start; // mostly used for testing, in practice always start at 0
@@ -166,7 +159,7 @@ mod test_ecb_ctr {
         1e031dda2fbe03d1792170a0f3009cee",
         );
 
-        let encrypted = ctr(&PLAINTEXT, &KEY_128, &CTR_IV, CTR_START)?;
+        let encrypted = ctr_core(&PLAINTEXT, &KEY_128, &CTR_IV, CTR_START)?;
 
         assert_eq!(
             expected, encrypted,
@@ -185,7 +178,7 @@ mod test_ecb_ctr {
         1e031dda2fbe03d1792170a0f3009cee",
         );
 
-        let decrypted = ctr(&ciphertext, &KEY_128, &CTR_IV, CTR_START)?;
+        let decrypted = ctr_core(&ciphertext, &KEY_128, &CTR_IV, CTR_START)?;
 
         assert_eq!(
             PLAINTEXT.to_vec(),
@@ -205,7 +198,7 @@ mod test_ecb_ctr {
         4f78a7f6d29809585a97daec58c6b050",
         );
 
-        let encrypted = ctr(&PLAINTEXT, &KEY_192, &CTR_IV, CTR_START)?;
+        let encrypted = ctr_core(&PLAINTEXT, &KEY_192, &CTR_IV, CTR_START)?;
 
         assert_eq!(
             expected, encrypted,
@@ -224,7 +217,7 @@ mod test_ecb_ctr {
         4f78a7f6d29809585a97daec58c6b050",
         );
 
-        let decrypted = ctr(&ciphertext, &KEY_192, &CTR_IV, CTR_START)?;
+        let decrypted = ctr_core(&ciphertext, &KEY_192, &CTR_IV, CTR_START)?;
 
         assert_eq!(
             PLAINTEXT.to_vec(),
@@ -244,7 +237,7 @@ mod test_ecb_ctr {
         dfc9c58db67aada613c2dd08457941a6",
         );
 
-        let encrypted = ctr(&PLAINTEXT, &KEY_256, &CTR_IV, CTR_START)?;
+        let encrypted = ctr_core(&PLAINTEXT, &KEY_256, &CTR_IV, CTR_START)?;
 
         assert_eq!(
             expected, encrypted,
@@ -263,7 +256,7 @@ mod test_ecb_ctr {
         dfc9c58db67aada613c2dd08457941a6",
         );
 
-        let decrypted = ctr(&ciphertext, &KEY_256, &CTR_IV, CTR_START)?;
+        let decrypted = ctr_core(&ciphertext, &KEY_256, &CTR_IV, CTR_START)?;
 
         assert_eq!(
             PLAINTEXT.to_vec(),
@@ -284,7 +277,7 @@ mod test_ecb_ctr {
     a254be88e037ddd9d79fb6411c3f9df8",
         );
 
-        let encrypted = encrypt_ecb(&PLAINTEXT, &KEY_128)?;
+        let encrypted = encrypt_ecb_core(&PLAINTEXT, &KEY_128)?;
 
         assert_eq!(
             expected, encrypted,
@@ -304,7 +297,7 @@ mod test_ecb_ctr {
     a254be88e037ddd9d79fb6411c3f9df8",
         );
 
-        let decrypted = decrypt_ecb(&ciphertext, &KEY_128)?;
+        let decrypted = decrypt_ecb_core(&ciphertext, &KEY_128)?;
 
         assert_eq!(
             PLAINTEXT.to_vec(),
@@ -325,7 +318,7 @@ mod test_ecb_ctr {
     daa0af074bd8083c8a32d4fc563c55cc",
         );
 
-        let encrypted = encrypt_ecb(&PLAINTEXT, &KEY_192)?;
+        let encrypted = encrypt_ecb_core(&PLAINTEXT, &KEY_192)?;
 
         assert_eq!(
             expected, encrypted,
@@ -345,7 +338,7 @@ mod test_ecb_ctr {
     daa0af074bd8083c8a32d4fc563c55cc",
         );
 
-        let decrypted = decrypt_ecb(&ciphertext, &KEY_192)?;
+        let decrypted = decrypt_ecb_core(&ciphertext, &KEY_192)?;
 
         assert_eq!(
             PLAINTEXT.to_vec(),
@@ -366,7 +359,7 @@ mod test_ecb_ctr {
     4c45dfb3b3b484ec35b0512dc8c1c4d6",
         );
 
-        let encrypted = encrypt_ecb(&PLAINTEXT, &KEY_256)?;
+        let encrypted = encrypt_ecb_core(&PLAINTEXT, &KEY_256)?;
 
         assert_eq!(
             expected, encrypted,
@@ -386,7 +379,7 @@ mod test_ecb_ctr {
     4c45dfb3b3b484ec35b0512dc8c1c4d6",
         );
 
-        let decrypted = decrypt_ecb(&ciphertext, &KEY_256)?;
+        let decrypted = decrypt_ecb_core(&ciphertext, &KEY_256)?;
 
         assert_eq!(
             PLAINTEXT.to_vec(),
