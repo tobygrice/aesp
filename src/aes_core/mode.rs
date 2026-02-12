@@ -74,7 +74,7 @@ where J0 is:
 pub(crate) fn compute_tag(ciphertext: &[u8], key: &[u8], iv: &[u8; 12], aad: &[u8]) -> Result<[u8; 16]> {
     let round_keys = expand_key(key)?;
 
-    // create inital ctr block (xor'd with tag at end)
+    // create initial ctr block (xor'd with tag at end)
     let j0 = ctr_block(iv, 1);
     let j0_e = flatten_block(encrypt_block(&j0, &round_keys));
 

@@ -1,15 +1,21 @@
 # AES in Rust
 ## About
-Planned features:
+Library features:
 - [x] AES encryption and decryption in ECB mode with PKCS#7 padding
-- [x] CLI using clap, supporting random key generation for encryption
 - [x] Robust library error handling using `thiserror` crate
 - [x] Counter mode of operation (CTR)
 - [x] Galois/counter mode (GCM) for message authentication
 - [x] GCM with AAD
+- [ ] Major library API overhaul
+
+CLI features:
+- [x] CLI using clap, supporting random key generation for encryption
+- [x] Specify mode of operation
+- [x] Accept AAD for GCM and print AAD to stdout when decrypting
+- [ ] Read, encrypt, write in fixed-size buffer blocks (don't load massive files into RAM)
 - [ ] Encryption and decryption in parallel
 
-## Usage
+## CLI Usage
 ```
 Usage: aes.exe <COMMAND>
 
@@ -51,4 +57,29 @@ Options:
   -o, --output <OUTPUT>  Output file path
   -k, --key <KEY>        Key file path
   -h, --help             Print help
+```
+
+## Library Usage
+AesKey struct (stores key bytes)
+AesCipher struct (stores round keys)
+
+```
+// AesKey::random(size: KeySize) -> Result<AesKey> // potential rand failure
+// AesKey::try_from_slice(key: &[u8]) -> Result<AesKey> // potential invalid key size
+
+// AesCipher::new(key: &AesKey) -> AesCipher // no potential for failure
+
+let key = AesKey::random(aes::KeySize::Bits256)?;
+fs::write(key_path, &key.as_bytes())?;
+
+let cipher = AesCipher::new(&key);
+
+let ciphertext = cipher.encrypt_ecb(&plaintext); // no potential for failure
+let plaintext = cipher.decrypt_ecb(&ciphertext); // no potential for failure
+
+let ciphertext = cipher.encrypt_ctr(&plaintext)?; // potential ctr overflow
+let plaintext = cipher.decrypt_ctr(&ciphertext)?; // potential ctr overflow
+
+let ciphertext = cipher.encrypt_gcm(&plaintext, &aad)?; // potential ctr overflow
+let (plaintext, aad) = cipher.decrypt_gcm(&ciphertext)?; // potential ctr overflow, potential invalid tag
 ```
