@@ -3,12 +3,6 @@ use rand::rngs::OsRng;
 
 use super::error::{Error, Result};
 
-// adapted from https://crypto.stackexchange.com/a/71206
-#[inline(always)]
-pub(crate) fn dbl(a: u8) -> u8 {
-    (a << 1) ^ (0x1B & (0u8).wrapping_sub((a >> 7) & 1))
-}
-
 pub(crate) fn random_iv() -> Result<[u8; 12]> {
     let mut iv = [0u8; 12];
     OsRng.try_fill_bytes(&mut iv)?;

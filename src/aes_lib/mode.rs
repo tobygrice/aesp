@@ -1,29 +1,26 @@
-use super::decryption::decrypt_block;
-use super::encryption::encrypt_block;
+use crate::aes_lib::core::encrypt_block;
+use crate::aes_lib::core::decrypt_block;
 use super::error::*;
-use super::key::expand_key;
 use super::util::{blockify, blockify_pad, ctr_block, flatten_block, gf_mul, unpad, xor_chunks};
 
-pub(crate) fn encrypt_ecb_core(plaintext: &[u8], key: &[u8]) -> Result<Vec<u8>> {
-    let round_keys = expand_key(key)?;
+pub(crate) fn encrypt_ecb_core(plaintext: &[u8], round_keys: &[[u8; 16]]) -> Result<Vec<u8>> {
     let plaintext = blockify_pad(plaintext, true);
 
     let mut ciphertext: Vec<u8> = Vec::with_capacity(plaintext.len() * 16);
     for block in plaintext {
-        let enc_block = encrypt_block(&block, &round_keys);
+        let enc_block = encrypt_block(&block, round_keys);
         ciphertext.append(&mut enc_block.into_iter().flatten().collect());
     }
 
     Ok(ciphertext)
 }
 
-pub(crate) fn decrypt_ecb_core(ciphertext: &[u8], key: &[u8]) -> Result<Vec<u8>> {
-    let round_keys = expand_key(key)?;
+pub(crate) fn decrypt_ecb_core(ciphertext: &[u8], round_keys: &[[u8; 16]]) -> Result<Vec<u8>> {
     let ciphertext = blockify(ciphertext)?;
 
     let mut plaintext: Vec<u8> = Vec::with_capacity(ciphertext.len() * 16);
     for block in ciphertext {
-        let dec_block = decrypt_block(&block, &round_keys);
+        let dec_block = decrypt_block(&block, round_keys);
         plaintext.append(&mut dec_block.into_iter().flatten().collect());
     }
 
@@ -31,8 +28,7 @@ pub(crate) fn decrypt_ecb_core(ciphertext: &[u8], key: &[u8]) -> Result<Vec<u8>>
     Ok(plaintext)
 }
 
-pub(crate) fn ctr_core(input: &[u8], key: &[u8], iv: &[u8; 12], ctr_start: u32) -> Result<Vec<u8>> {
-    let round_keys = expand_key(&key)?;
+pub(crate) fn ctr_core(input: &[u8], round_keys: &[[u8; 16]], iv: &[u8; 12], ctr_start: u32) -> Result<Vec<u8>> {
     let mut output = Vec::with_capacity(input.len());
     let mut ctr = ctr_start; // mostly used for testing, in practice always start at 0
 
@@ -40,7 +36,7 @@ pub(crate) fn ctr_core(input: &[u8], key: &[u8], iv: &[u8; 12], ctr_start: u32) 
         let block = ctr_block(iv, ctr); // form block from iv + ctr
         // encrypt block
         // xor each element of chunk (1-16 bytes) with corresponding elem in keystream
-        let keystream = flatten_block(encrypt_block(&block, &round_keys));
+        let keystream = flatten_block(encrypt_block(&block, round_keys));
         let ct = xor_chunks(&keystream, chunk);
         output.extend_from_slice(&ct[..chunk.len()]);
         ctr = match ctr.checked_add(1) {
@@ -71,15 +67,13 @@ final tag = s ^ encrypt_block(J0, key)
 where J0 is:
     - IV || 1u32 (initial ctr block for ctr = 1)
 */
-pub(crate) fn compute_tag(ciphertext: &[u8], key: &[u8], iv: &[u8; 12], aad: &[u8]) -> Result<[u8; 16]> {
-    let round_keys = expand_key(key)?;
-
+pub(crate) fn compute_tag(ciphertext: &[u8], round_keys: &[[u8; 16]], iv: &[u8; 12], aad: &[u8]) -> Result<[u8; 16]> {
     // create initial ctr block (xor'd with tag at end)
     let j0 = ctr_block(iv, 1);
-    let j0_e = flatten_block(encrypt_block(&j0, &round_keys));
+    let j0_e = flatten_block(encrypt_block(&j0, round_keys));
 
     // generate H by encrypting block of 0s
-    let h = flatten_block(encrypt_block(&[[0u8; 4]; 4], &round_keys));
+    let h = flatten_block(encrypt_block(&[[0u8; 4]; 4], round_keys));
 
     // s = ghash accumulator
     let mut s = [0u8; 16];

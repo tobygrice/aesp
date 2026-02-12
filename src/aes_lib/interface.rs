@@ -91,11 +91,7 @@ pub fn decrypt_gcm(ciphertext: &[u8], key: &[u8]) -> Result<(Vec<u8>, Option<Vec
     }
 
     // wrap AAD in option
-    let aad = if !aad.is_empty() {
-        Some(aad)
-    } else {
-        None
-    };
+    let aad = if !aad.is_empty() { Some(aad) } else { None };
 
     // run ctr starting at 2, as per NIST spec
     let plaintext = ctr_core(ct, key, &iv, 2)?;
