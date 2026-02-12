@@ -1,34 +1,71 @@
-use crate::aes_lib::core::encrypt_block;
-use crate::aes_lib::core::decrypt_block;
 use super::error::*;
-use super::util::{blockify, blockify_pad, ctr_block, flatten_block, gf_mul, unpad, xor_chunks};
+use super::util::{ctr_block, gf_mul, xor_chunks};
+use crate::aes_lib::core::decrypt_block;
+use crate::aes_lib::core::encrypt_block;
 
 pub(crate) fn encrypt_ecb_core(plaintext: &[u8], round_keys: &[[u8; 16]]) -> Result<Vec<u8>> {
-    let plaintext = blockify_pad(plaintext, true);
+    // last block needs to be PKCS#7 padded
+    let rem_len = plaintext.len() % 16; // number of leftover bytes after chunking into 16
+    let pad_len = 16 - rem_len; // number of bytes to be padded
+    let chunks_len = plaintext.len() - rem_len; // number of bytes that can fit into 16-byte chunks
 
-    let mut ciphertext: Vec<u8> = Vec::with_capacity(plaintext.len() * 16);
-    for block in plaintext {
-        let enc_block = encrypt_block(&block, round_keys);
-        ciphertext.append(&mut enc_block.into_iter().flatten().collect());
+    let mut ciphertext = vec![0u8; plaintext.len() + pad_len];
+
+    for (pt, ct) in plaintext[..chunks_len]
+        .chunks_exact(16)
+        .zip(ciphertext[..chunks_len].chunks_exact_mut(16))
+    {
+        let pt_block: &[u8; 16] = pt.try_into().unwrap();
+        let enc = encrypt_block(pt_block, round_keys);
+        ct.copy_from_slice(&enc);
     }
+
+    // PKCS#7 pad final block
+    let mut last = [0u8; 16];
+    last[..rem_len].copy_from_slice(&plaintext[chunks_len..]); // rem may be 0 (copies nothing)
+    last[rem_len..].fill(pad_len as u8);
+
+    // encrypt and write final padded block
+    let enc_last = encrypt_block(&last, round_keys);
+    ciphertext[chunks_len..].copy_from_slice(&enc_last);
 
     Ok(ciphertext)
 }
 
 pub(crate) fn decrypt_ecb_core(ciphertext: &[u8], round_keys: &[[u8; 16]]) -> Result<Vec<u8>> {
-    let ciphertext = blockify(ciphertext)?;
-
-    let mut plaintext: Vec<u8> = Vec::with_capacity(ciphertext.len() * 16);
-    for block in ciphertext {
-        let dec_block = decrypt_block(&block, round_keys);
-        plaintext.append(&mut dec_block.into_iter().flatten().collect());
+    if ciphertext.len() % 16 != 0 {
+        return Err(Error::InvalidCiphertext {
+            len: ciphertext.len(),
+            context: "ECB ciphertext not a multiple of 16 bytes",
+        });
     }
 
-    unpad(&mut plaintext);
+    let mut plaintext = vec![0u8; ciphertext.len()];
+    for (ct, pt) in ciphertext
+        .chunks_exact(16)
+        .zip(plaintext.chunks_exact_mut(16))
+    {
+        let ct_block: &[u8; 16] = ct.try_into().unwrap();
+        let dec = decrypt_block(ct_block, round_keys);
+        pt.copy_from_slice(&dec);
+    }
+
+    // unpad plaintext
+    let pad_len: usize = match plaintext.last() {
+        Some(v) => *v as usize,
+        None => 0,
+    };
+    plaintext.truncate(plaintext.len() - pad_len);
+
     Ok(plaintext)
 }
 
-pub(crate) fn ctr_core(input: &[u8], round_keys: &[[u8; 16]], iv: &[u8; 12], ctr_start: u32) -> Result<Vec<u8>> {
+pub(crate) fn ctr_core(
+    input: &[u8],
+    round_keys: &[[u8; 16]],
+    iv: &[u8; 12],
+    ctr_start: u32,
+) -> Result<Vec<u8>> {
     let mut output = Vec::with_capacity(input.len());
     let mut ctr = ctr_start; // mostly used for testing, in practice always start at 0
 
@@ -36,7 +73,7 @@ pub(crate) fn ctr_core(input: &[u8], round_keys: &[[u8; 16]], iv: &[u8; 12], ctr
         let block = ctr_block(iv, ctr); // form block from iv + ctr
         // encrypt block
         // xor each element of chunk (1-16 bytes) with corresponding elem in keystream
-        let keystream = flatten_block(encrypt_block(&block, round_keys));
+        let keystream = encrypt_block(&block, round_keys);
         let ct = xor_chunks(&keystream, chunk);
         output.extend_from_slice(&ct[..chunk.len()]);
         ctr = match ctr.checked_add(1) {
@@ -67,13 +104,18 @@ final tag = s ^ encrypt_block(J0, key)
 where J0 is:
     - IV || 1u32 (initial ctr block for ctr = 1)
 */
-pub(crate) fn compute_tag(ciphertext: &[u8], round_keys: &[[u8; 16]], iv: &[u8; 12], aad: &[u8]) -> Result<[u8; 16]> {
+pub(crate) fn compute_tag(
+    ciphertext: &[u8],
+    round_keys: &[[u8; 16]],
+    iv: &[u8; 12],
+    aad: &[u8],
+) -> Result<[u8; 16]> {
     // create initial ctr block (xor'd with tag at end)
     let j0 = ctr_block(iv, 1);
-    let j0_e = flatten_block(encrypt_block(&j0, round_keys));
+    let j0_e = encrypt_block(&j0, round_keys);
 
     // generate H by encrypting block of 0s
-    let h = flatten_block(encrypt_block(&[[0u8; 4]; 4], round_keys));
+    let h = encrypt_block(&[0u8; 16], round_keys);
 
     // s = ghash accumulator
     let mut s = [0u8; 16];
@@ -101,10 +143,10 @@ pub(crate) fn compute_tag(ciphertext: &[u8], round_keys: &[[u8; 16]], iv: &[u8; 
     Ok(xor_chunks(&s, &j0_e))
 }
 
-
 #[cfg(test)]
 mod test_ecb_ctr {
     use super::*;
+    use crate::aes_lib::key::{Key, expand_key};
 
     // all test vectors from
     // https://nvlpubs.nist.gov/nistpubs/Legacy/SP/nistspecialpublication800-38a.pdf
@@ -153,7 +195,9 @@ mod test_ecb_ctr {
         1e031dda2fbe03d1792170a0f3009cee",
         );
 
-        let encrypted = ctr_core(&PLAINTEXT, &KEY_128, &CTR_IV, CTR_START)?;
+        let key = Key::try_from_slice(&KEY_128)?;
+        let round_keys = expand_key(&key);
+        let encrypted = ctr_core(&PLAINTEXT, &round_keys, &CTR_IV, CTR_START)?;
 
         assert_eq!(
             expected, encrypted,
@@ -172,7 +216,9 @@ mod test_ecb_ctr {
         1e031dda2fbe03d1792170a0f3009cee",
         );
 
-        let decrypted = ctr_core(&ciphertext, &KEY_128, &CTR_IV, CTR_START)?;
+        let key = Key::try_from_slice(&KEY_128)?;
+        let round_keys = expand_key(&key);
+        let decrypted = ctr_core(&ciphertext, &round_keys, &CTR_IV, CTR_START)?;
 
         assert_eq!(
             PLAINTEXT.to_vec(),
@@ -192,7 +238,9 @@ mod test_ecb_ctr {
         4f78a7f6d29809585a97daec58c6b050",
         );
 
-        let encrypted = ctr_core(&PLAINTEXT, &KEY_192, &CTR_IV, CTR_START)?;
+        let key = Key::try_from_slice(&KEY_192)?;
+        let round_keys = expand_key(&key);
+        let encrypted = ctr_core(&PLAINTEXT, &round_keys, &CTR_IV, CTR_START)?;
 
         assert_eq!(
             expected, encrypted,
@@ -211,7 +259,9 @@ mod test_ecb_ctr {
         4f78a7f6d29809585a97daec58c6b050",
         );
 
-        let decrypted = ctr_core(&ciphertext, &KEY_192, &CTR_IV, CTR_START)?;
+        let key = Key::try_from_slice(&KEY_192)?;
+        let round_keys = expand_key(&key);
+        let decrypted = ctr_core(&ciphertext, &round_keys, &CTR_IV, CTR_START)?;
 
         assert_eq!(
             PLAINTEXT.to_vec(),
@@ -231,7 +281,9 @@ mod test_ecb_ctr {
         dfc9c58db67aada613c2dd08457941a6",
         );
 
-        let encrypted = ctr_core(&PLAINTEXT, &KEY_256, &CTR_IV, CTR_START)?;
+        let key = Key::try_from_slice(&KEY_256)?;
+        let round_keys = expand_key(&key);
+        let encrypted = ctr_core(&PLAINTEXT, &round_keys, &CTR_IV, CTR_START)?;
 
         assert_eq!(
             expected, encrypted,
@@ -250,7 +302,9 @@ mod test_ecb_ctr {
         dfc9c58db67aada613c2dd08457941a6",
         );
 
-        let decrypted = ctr_core(&ciphertext, &KEY_256, &CTR_IV, CTR_START)?;
+        let key = Key::try_from_slice(&KEY_256)?;
+        let round_keys = expand_key(&key);
+        let decrypted = ctr_core(&ciphertext, &round_keys, &CTR_IV, CTR_START)?;
 
         assert_eq!(
             PLAINTEXT.to_vec(),
@@ -271,7 +325,9 @@ mod test_ecb_ctr {
     a254be88e037ddd9d79fb6411c3f9df8",
         );
 
-        let encrypted = encrypt_ecb_core(&PLAINTEXT, &KEY_128)?;
+        let key = Key::try_from_slice(&KEY_128)?;
+        let round_keys = expand_key(&key);
+        let encrypted = encrypt_ecb_core(&PLAINTEXT, &round_keys)?;
 
         assert_eq!(
             expected, encrypted,
@@ -291,7 +347,9 @@ mod test_ecb_ctr {
     a254be88e037ddd9d79fb6411c3f9df8",
         );
 
-        let decrypted = decrypt_ecb_core(&ciphertext, &KEY_128)?;
+        let key = Key::try_from_slice(&KEY_128)?;
+        let round_keys = expand_key(&key);
+        let decrypted = decrypt_ecb_core(&ciphertext, &round_keys)?;
 
         assert_eq!(
             PLAINTEXT.to_vec(),
@@ -312,7 +370,9 @@ mod test_ecb_ctr {
     daa0af074bd8083c8a32d4fc563c55cc",
         );
 
-        let encrypted = encrypt_ecb_core(&PLAINTEXT, &KEY_192)?;
+        let key = Key::try_from_slice(&KEY_192)?;
+        let round_keys = expand_key(&key);
+        let encrypted = encrypt_ecb_core(&PLAINTEXT, &round_keys)?;
 
         assert_eq!(
             expected, encrypted,
@@ -332,7 +392,9 @@ mod test_ecb_ctr {
     daa0af074bd8083c8a32d4fc563c55cc",
         );
 
-        let decrypted = decrypt_ecb_core(&ciphertext, &KEY_192)?;
+        let key = Key::try_from_slice(&KEY_192)?;
+        let round_keys = expand_key(&key);
+        let decrypted = decrypt_ecb_core(&ciphertext, &round_keys)?;
 
         assert_eq!(
             PLAINTEXT.to_vec(),
@@ -353,7 +415,9 @@ mod test_ecb_ctr {
     4c45dfb3b3b484ec35b0512dc8c1c4d6",
         );
 
-        let encrypted = encrypt_ecb_core(&PLAINTEXT, &KEY_256)?;
+        let key = Key::try_from_slice(&KEY_256)?;
+        let round_keys = expand_key(&key);
+        let encrypted = encrypt_ecb_core(&PLAINTEXT, &round_keys)?;
 
         assert_eq!(
             expected, encrypted,
@@ -373,7 +437,9 @@ mod test_ecb_ctr {
     4c45dfb3b3b484ec35b0512dc8c1c4d6",
         );
 
-        let decrypted = decrypt_ecb_core(&ciphertext, &KEY_256)?;
+        let key = Key::try_from_slice(&KEY_256)?;
+        let round_keys = expand_key(&key);
+        let decrypted = decrypt_ecb_core(&ciphertext, &round_keys)?;
 
         assert_eq!(
             PLAINTEXT.to_vec(),
@@ -398,12 +464,13 @@ mod test_ecb_ctr {
 mod test_gcm {
     use super::*;
     use super::test_ecb_ctr::hex_to_bytes;
+    use crate::aes_lib::key::{Key, expand_key};
 
     // all test vectors from
     // https://boringssl.googlesource.com/boringssl.git/%2B/734fca08902889c88e84839134262bdf5c12eebf/crypto/cipher/cipher_test.txt
 
     #[test]
-    fn tag_no_pt_no_aad() {
+    fn tag_no_pt_no_aad() -> Result<()> {
         // Vector:
         // key = 00..00 (16 bytes)
         // iv  = 00..00 (12 bytes)
@@ -415,12 +482,16 @@ mod test_gcm {
         let aad: [u8; 0] = [];
         let ciphertext: [u8; 0] = [];
 
-        let tag = compute_tag(&ciphertext, &key, &iv, &aad).unwrap();
+        let key = Key::try_from_slice(&key)?;
+        let round_keys = expand_key(&key);
+        let tag = compute_tag(&ciphertext, &round_keys, &iv, &aad).unwrap();
         assert_eq!(tag, hex_to_arr_16("58e2fccefa7e3061367f1d57a4e7455a"));
+
+        Ok(())
     }
 
     #[test]
-    fn tag_no_aad_1() {
+    fn tag_no_aad_1() -> Result<()> {
         // Vector:
         // key = 00..00 (16 bytes)
         // iv  = 00..00 (12 bytes)
@@ -433,12 +504,16 @@ mod test_gcm {
         let aad: [u8; 0] = [];
         let ciphertext = hex_to_bytes("0388dace60b6a392f328c2b971b2fe78");
 
-        let tag = compute_tag(&ciphertext, &key, &iv, &aad).unwrap();
+        let key = Key::try_from_slice(&key)?;
+        let round_keys = expand_key(&key);
+        let tag = compute_tag(&ciphertext, &round_keys, &iv, &aad).unwrap();
         assert_eq!(tag, hex_to_arr_16("ab6e47d42cec13bdf53a67b21257bddf"));
+
+        Ok(())
     }
 
     #[test]
-    fn tag_no_aad_2() {
+    fn tag_no_aad_2() -> Result<()> {
         // Vector:
         // key = feffe9928665731c6d6a8f9467308308
         // iv  = cafebabefacedbaddecaf888
@@ -455,12 +530,16 @@ mod test_gcm {
              1ba30b396a0aac973d58e091473f5985",
         );
 
-        let tag = compute_tag(&ciphertext, &key, &iv, &aad).unwrap();
+        let key = Key::try_from_slice(&key)?;
+        let round_keys = expand_key(&key);
+        let tag = compute_tag(&ciphertext, &round_keys, &iv, &aad).unwrap();
         assert_eq!(tag, hex_to_arr_16("4d5c2af327cd64a62cf35abd2ba6fab4"));
+
+        Ok(())
     }
 
     #[test]
-    fn tag_with_aad() {
+    fn tag_with_aad() -> Result<()> {
         // Vector:
         // key = feffe9928665731c6d6a8f9467308308
         // iv  = cafebabefacedbaddecaf888
@@ -477,8 +556,12 @@ mod test_gcm {
              1ba30b396a0aac973d58e091",
         );
 
-        let tag = compute_tag(&ciphertext, &key, &iv, &aad).unwrap();
+        let key = Key::try_from_slice(&key)?;
+        let round_keys = expand_key(&key);
+        let tag = compute_tag(&ciphertext, &round_keys, &iv, &aad).unwrap();
         assert_eq!(tag, hex_to_arr_16("5bc94fbc3221a5db94fae95ae7121a47"));
+
+        Ok(())
     }
 
     fn hex_to_arr_12(hex: &str) -> [u8; 12] {

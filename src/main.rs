@@ -1,5 +1,6 @@
 mod args;
 
+use aes::Key;
 use args::{Cli, Commands};
 use clap::Parser;
 
@@ -46,16 +47,19 @@ fn aes_cli() -> Result<(), CliError> {
             // read or generate key
             let key = if enc.gen_key {
                 let rand_key = match enc.key_size {
-                    args::KeySize::Bits128 => aes::random_key(aes::KeySize::Bits128)?,
-                    args::KeySize::Bits192 => aes::random_key(aes::KeySize::Bits192)?,
-                    args::KeySize::Bits256 => aes::random_key(aes::KeySize::Bits256)?,
+                    args::KeySize::Bits128 => aes::Key::random_key(aes::KeySize::Bits128)?,
+                    args::KeySize::Bits192 => aes::Key::random_key(aes::KeySize::Bits192)?,
+                    args::KeySize::Bits256 => aes::Key::random_key(aes::KeySize::Bits256)?,
                 };
-                fs::write(key_path, &rand_key)?;
+                fs::write(key_path, &rand_key.as_bytes())?;
                 rand_key
             } else {
                 // read key from key_path
-                fs::read(key_path)?
+                let key_bytes = fs::read(key_path)?;
+                aes::Key::try_from_slice(&key_bytes)?
             };
+
+            let cipher = aes::Cipher::new(&key);
 
             // parse AAD
             let aad: Vec<u8> = match enc.aad {
@@ -72,9 +76,9 @@ fn aes_cli() -> Result<(), CliError> {
 
             // encrypt plaintext and write output
             let ciphertext = match mode {
-                args::Mode::ModeECB => aes::encrypt_ecb(&plaintext, &key)?,
-                args::Mode::ModeCTR => aes::encrypt_ctr(&plaintext, &key)?,
-                args::Mode::ModeGCM => aes::encrypt_gcm(&plaintext, &key, &aad)?,
+                args::Mode::ModeECB => cipher.encrypt_ecb(&plaintext)?,
+                args::Mode::ModeCTR => cipher.encrypt_ctr(&plaintext)?,
+                args::Mode::ModeGCM => cipher.encrypt_gcm(&plaintext, &aad)?,
             };
 
             let duration = start.elapsed();
@@ -95,15 +99,18 @@ fn aes_cli() -> Result<(), CliError> {
 
             // read inputs
             let ciphertext = fs::read(input_path)?;
-            let key = fs::read(key_path)?;
+            let key_bytes = fs::read(key_path)?;
+            let key = Key::try_from_slice(&key_bytes)?;
+
+            let cipher = aes::Cipher::new(&key);
 
             let start = Instant::now();
 
             // decrypt ciphertext and write output
             let (plaintext, aad) = match mode {
-                args::Mode::ModeECB => (aes::decrypt_ecb(&ciphertext, &key)?, None),
-                args::Mode::ModeCTR => (aes::decrypt_ctr(&ciphertext, &key)?, None),
-                args::Mode::ModeGCM => aes::decrypt_gcm(&ciphertext, &key)?,
+                args::Mode::ModeECB => (cipher.decrypt_ecb(&ciphertext)?, None),
+                args::Mode::ModeCTR => (cipher.decrypt_ctr(&ciphertext)?, None),
+                args::Mode::ModeGCM => cipher.decrypt_gcm(&ciphertext)?,
             };
 
             let duration = start.elapsed();

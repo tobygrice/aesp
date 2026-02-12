@@ -1,9 +1,10 @@
-mod core;
-mod mode;
-mod key;
-mod util;
-mod error;
 mod cipher;
+mod core;
+mod error;
+mod key;
+mod mode;
+mod util;
 
-pub use key::{Key, KeySize};
 pub use error::{Error, Result};
+pub use key::{Key, KeySize};
+pub use cipher::Cipher;

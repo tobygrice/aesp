@@ -62,7 +62,7 @@ fn mix_columns_inv(state: &mut [u8; 16]) {
 mod tests {
     use crate::aes_lib::Key;
     use crate::aes_lib::error::Result;
-    use crate::aes_lib::cipher::expand_key;
+    use crate::aes_lib::key::expand_key;
     use crate::aes_lib::core::{decryption, encryption};
 
     #[test]

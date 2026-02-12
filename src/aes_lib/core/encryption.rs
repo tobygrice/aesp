@@ -59,7 +59,7 @@ mod tests {
     use super::*;
     use crate::aes_lib::Key;
     use crate::aes_lib::error::Result;
-    use crate::aes_lib::cipher::expand_key;
+    use crate::aes_lib::key::expand_key;
 
     #[test]
     fn test_mix_columns() {
