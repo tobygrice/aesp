@@ -43,10 +43,10 @@ pub fn compute_tag(
     let mut s = [0u8; 16];
 
     // compute s over AAD (zero-pads final partial block)
-    gkey.ghash_update(&mut s, aad);
+    s = gkey.ghash(s, aad);
 
     // compute s over ciphertext (zero-pads final partial block)
-    gkey.ghash_update(&mut s, ciphertext);
+    s = gkey.ghash(s, ciphertext);
 
     // authenticate message length, build aad_size || ct_size
     let aad_size = (aad.len() as u64) * 8; // size in bits
@@ -103,15 +103,16 @@ impl GHashKey {
         Self { table }
     }
 
-    /// Update GHASH accumulator `s` with arbitrary-length data (AAD or ciphertext).
+    /// s[i] = (s[i] ^ data[i]) * H
     #[inline(always)]
-    fn ghash_update(&self, s: &mut [u8; 16], data: &[u8]) {
+    fn ghash(&self, mut s: [u8; 16], data: &[u8]) -> [u8; 16] {
         for chunk in data.chunks(16) {
             for i in 0..chunk.len() {
                 s[i] ^= chunk[i];
             }
-            *s = self.mul(*s);
+            s = self.mul(s);
         }
+        s
     }
 
     /// Compute x * H (GHASH field multiply) using the precomputed table.

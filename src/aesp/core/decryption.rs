@@ -38,6 +38,8 @@ pub(crate) fn sub_bytes_inv(state: &mut [u8; 16]) {
 /// The third row shifts right by three positions.
 #[inline(always)]
 fn shift_rows_inv(state: &mut [u8; 16]) {
+    // trivial implementation to improve efficiency
+
     let s = *state;
 
     // row 0 (indices 0,4,8,12): unchanged

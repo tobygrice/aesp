@@ -1,24 +1,29 @@
 # AES in Rust
+
 ## About
+
 Library roadmap:
+
 - [x] AES encryption and decryption in ECB mode with PKCS#7 padding
 - [x] Robust library error handling using `thiserror` crate
 - [x] Counter mode of operation (CTR)
 - [x] Galois/counter mode (GCM) for message authentication
 - [x] GCM with AAD
 - [x] Major library API overhaul
-- [ ] Encryption and decryption in parallel
+- [x] Encryption and decryption in parallel for all modes
 - [x] In-code library documentation for crates.io
 - [ ] Publish libary
 
 CLI roadmap:
+
 - [x] CLI using clap, supporting random key generation for encryption
 - [x] Specify mode of operation
 - [x] Accept AAD for GCM and print AAD to stdout when decrypting
 - [ ] Read, encrypt, write in fixed-size buffer blocks (don't load massive files into RAM)
 
 ## CLI Usage
-```
+
+```plaintext
 Usage: aes.exe <COMMAND>
 
 Commands:
@@ -32,7 +37,8 @@ Options:
 ```
 
 ### Encryption
-```
+
+```plaintext
 Encrypt input to output
 
 Usage: aes.exe encrypt [OPTIONS] --input <INPUT> --output <OUTPUT> --key <KEY>
@@ -49,7 +55,8 @@ Options:
 ```
 
 ### Decryption
-```
+
+```plaintext
 Decrypt input to output
 
 Usage: aes.exe decrypt --input <INPUT> --output <OUTPUT> --key <KEY>
@@ -62,10 +69,11 @@ Options:
 ```
 
 ## Library Usage
+
 AesKey struct (stores key bytes)
 AesCipher struct (stores round keys)
 
-```
+```plaintext
 // AesKey::random(size: KeySize) -> Result<AesKey> // potential rand failure
 // AesKey::try_from_slice(key: &[u8]) -> Result<AesKey> // potential invalid key size
 
