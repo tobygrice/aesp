@@ -5,7 +5,7 @@ use crate::aesp::error::*;
 use crate::aesp::modes::util::{PARALLEL_THRESHOLD, unpad};
 
 /// Core ECB encryption algorithm. Encrypts plaintext in 16-byte blocks to form ciphertext. Uses PKCS#7 padding.
-pub fn ecb_core_enc(plaintext: &[u8], round_keys: &[[u8; 16]]) -> Result<Vec<u8>> {
+pub fn ecb_core_enc(plaintext: &[u8], round_keys: &[[u8; 16]]) -> Vec<u8> {
     // last block needs to be PKCS#7 padded. Variables to track where to start padding:
     let rem_len = plaintext.len() % 16; // number of leftover bytes after chunking into 16
     let pad_len = 16 - rem_len; // number of bytes to be padded
@@ -46,7 +46,7 @@ pub fn ecb_core_enc(plaintext: &[u8], round_keys: &[[u8; 16]]) -> Result<Vec<u8>
     let enc_last = encrypt_block(&last, round_keys);
     ciphertext[chunks_len..].copy_from_slice(&enc_last);
 
-    Ok(ciphertext)
+    ciphertext
 }
 
 /// Core ECB decryption algorithm. Decrypts ciphertext in 16-byte blocks to form plaintext. Assumes ciphertext was PKCS#7 padded.
@@ -110,7 +110,7 @@ mod test_ecb {
 
         let key = Key::try_from_slice(&KEY_128)?;
         let cipher = Cipher::new(&key);
-        let encrypted = ecb_core_enc(&PLAINTEXT, cipher.get_round_keys())?;
+        let encrypted = ecb_core_enc(&PLAINTEXT, cipher.get_round_keys());
 
         assert_eq!(
             expected, encrypted,
@@ -155,7 +155,7 @@ mod test_ecb {
 
         let key = Key::try_from_slice(&KEY_192)?;
         let cipher = Cipher::new(&key);
-        let encrypted = ecb_core_enc(&PLAINTEXT, cipher.get_round_keys())?;
+        let encrypted = ecb_core_enc(&PLAINTEXT, cipher.get_round_keys());
 
         assert_eq!(
             expected, encrypted,
@@ -200,7 +200,7 @@ mod test_ecb {
 
         let key = Key::try_from_slice(&KEY_256)?;
         let cipher = Cipher::new(&key);
-        let encrypted = ecb_core_enc(&PLAINTEXT, cipher.get_round_keys())?;
+        let encrypted = ecb_core_enc(&PLAINTEXT, cipher.get_round_keys());
 
         assert_eq!(
             expected, encrypted,

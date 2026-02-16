@@ -75,7 +75,7 @@ fn aes_cli() -> Result<(), CliError> {
 
             // encrypt plaintext and write output
             let ciphertext = match mode {
-                args::Mode::ModeECB => cipher.encrypt_ecb(&plaintext)?,
+                args::Mode::ModeECB => cipher.encrypt_ecb(&plaintext),
                 args::Mode::ModeCTR => cipher.encrypt_ctr(&plaintext)?,
                 args::Mode::ModeGCM => cipher.encrypt_gcm(&plaintext, aad.as_deref())?,
             };
@@ -150,4 +150,51 @@ fn parse_aad(s: &str) -> Result<Vec<u8>, std::num::ParseIntError> {
         .step_by(2)
         .map(|i| u8::from_str_radix(&hex[i..i + 2], 16))
         .collect::<Result<Vec<u8>, _>>()
+}
+
+#[cfg(test)]
+mod test {
+    #[test]
+    fn sample_test() {
+        use aes::{Cipher, Key};
+
+        // generate a random 256-bit key.
+        let key = Key::rand_key_256().expect("Random key generation failed");
+
+        // instantiate a cipher object using that key.
+        let cipher = Cipher::new(&key);
+
+        // instantiate sample plaintext (cipher encrypts raw bytes).
+        let plaintext = ("Hello, World!").as_bytes();
+
+        // encrypt the plaintext bytes using AES-256-CTR.
+        // note that the key size does not need to be explicitly stated.
+        let ciphertext = cipher.encrypt_ctr(&plaintext).expect("Counter overflow");
+
+        // decrypt the resultant ciphertext.
+        let decrypted_ct = cipher.decrypt_ctr(&ciphertext).expect("Counter overflow");
+
+        // round trip results in the same plaintext as the original message.
+        assert_eq!(plaintext, decrypted_ct);
+
+        // for ECB mode:
+        let ecb_ciphertext = cipher.encrypt_ecb(&plaintext);
+        let ecb_plaintext = cipher
+            .decrypt_ecb(&ecb_ciphertext)
+            .expect("Invalid ciphertext");
+        assert_eq!(plaintext, ecb_plaintext);
+
+        // for GCM with AAD:
+        let aad = vec![0xDE, 0xAD, 0xBE, 0xEF];
+        let gcm_ciphertext = cipher
+            .encrypt_gcm(&plaintext, Some(&aad))
+            .expect("Counter overflow");
+
+        // decrypt GCM returns a tuple containing (plaintext, Option(aad))
+        let (gcm_plaintext, res_aad) = cipher
+            .decrypt_gcm(&gcm_ciphertext)
+            .expect("Invalid tag or counter overflow");
+        assert_eq!(plaintext, gcm_plaintext);
+        assert_eq!(Some(aad), res_aad);
+    }
 }

@@ -103,7 +103,7 @@ impl GHashKey {
         Self { table }
     }
 
-    /// s[i] = (s[i] ^ data[i]) * H
+    /// For each 16-byte block in data:   s = (s ^ data[i]) * H
     #[inline(always)]
     fn ghash(&self, mut s: [u8; 16], data: &[u8]) -> [u8; 16] {
         for chunk in data.chunks(16) {

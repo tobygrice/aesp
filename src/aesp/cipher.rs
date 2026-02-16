@@ -28,7 +28,7 @@ impl Cipher {
     ///
     /// Encrypts each 16-byte block entirely independently
     /// and chains them together. **Vulnerable to pattern emergence in the ciphertext.**
-    pub fn encrypt_ecb(&self, plaintext: &[u8]) -> Result<Vec<u8>> {
+    pub fn encrypt_ecb(&self, plaintext: &[u8]) -> Vec<u8> {
         ecb_core_enc(plaintext, &self.round_keys)
     }
 
