@@ -6,7 +6,7 @@ Library features:
 - [x] Counter mode of operation (CTR)
 - [x] Galois/counter mode (GCM) for message authentication
 - [x] GCM with AAD
-- [ ] Major library API overhaul
+- [x] Major library API overhaul
 
 CLI features:
 - [x] CLI using clap, supporting random key generation for encryption

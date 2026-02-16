@@ -12,12 +12,16 @@ enum KeyBytes {
     K256([u8; 32]),
 }
 
+/// Contains a valid AES key. Can be instantiated with a random key, or built from a slice 
+/// of bytes that is 16, 24, or 32 bytes long.
+/// A key object is required to instantiate a [Cipher](crate::aes_lib::cipher::Cipher).
 #[derive(Clone)]
 pub struct Key {
     bytes: KeyBytes,
 }
 
 impl Key {
+    /// Generate a random 128-bit key. Returns Error if OsRng fails.
     pub fn rand_key_128() -> Result<Self> {
         let mut k = [0u8; 16];
         OsRng.try_fill_bytes(&mut k)?;
@@ -26,6 +30,7 @@ impl Key {
         })
     }
 
+    /// Generate a random 192-bit key. Returns Error if OsRng fails.
     pub fn rand_key_192() -> Result<Self> {
         let mut k = [0u8; 24];
         OsRng.try_fill_bytes(&mut k)?;
@@ -34,6 +39,7 @@ impl Key {
         })
     }
 
+    /// Generate a random 256-bit key. Returns Error if OsRng fails.
     pub fn rand_key_256() -> Result<Self> {
         let mut k = [0u8; 32];
         OsRng.try_fill_bytes(&mut k)?;
@@ -42,6 +48,8 @@ impl Key {
         })
     }
 
+    /// Attempts to build a key from a slice of bytes. Will return an InvalidKeyLength error 
+    /// if the input slice is anything other than 16, 24, or 32 bytes long.
     pub fn try_from_slice(bytes: &[u8]) -> Result<Self> {
         Ok(match bytes.len() {
             16 => Self {
@@ -57,6 +65,7 @@ impl Key {
         })
     }
 
+    /// Returns a reference to the internal key, represented as an array of bytes.
     pub fn as_bytes(&self) -> &[u8] {
         match &self.bytes {
             KeyBytes::K128(k) => k,
@@ -66,6 +75,8 @@ impl Key {
     }
 }
 
+/// AES key schedule. Returns a vector of 11, 13, and 15 round keys for AES-128, AES-192, 
+/// and AES-256, respectively
 pub(crate) fn expand_key(key: &Key) -> Vec<[u8; 16]> {
     let key = key.as_bytes();
 

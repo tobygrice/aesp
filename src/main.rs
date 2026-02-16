@@ -1,6 +1,5 @@
 mod args;
 
-use aes::Key;
 use args::{Cli, Commands};
 use clap::Parser;
 
@@ -100,7 +99,7 @@ fn aes_cli() -> Result<(), CliError> {
             // read inputs
             let ciphertext = fs::read(input_path)?;
             let key_bytes = fs::read(key_path)?;
-            let key = Key::try_from_slice(&key_bytes)?;
+            let key = aes::Key::try_from_slice(&key_bytes)?;
 
             let cipher = aes::Cipher::new(&key);
 
