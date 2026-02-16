@@ -1,5 +1,5 @@
 use super::constants::SBOX_INV;
-use super::core_util::{dbl, add_round_key};
+use super::util::{dbl, add_round_key};
 
 /// Core AES decryption function. Decrypts 16 byte block using provided round keys.
 #[inline(always)]
@@ -78,10 +78,10 @@ fn mix_columns_inv(state: &mut [u8; 16]) {
 
 #[cfg(test)]
 mod tests {
-    use crate::aes_lib::cipher::Cipher;
-    use crate::aes_lib::key::Key;
-    use crate::aes_lib::error::Result;
-    use crate::aes_lib::core::{decryption, encryption};
+    use crate::aesp::cipher::Cipher;
+    use crate::aesp::key::Key;
+    use crate::aesp::error::Result;
+    use crate::aesp::core::{decryption, encryption};
 
     #[test]
     fn test_shift_rows() {

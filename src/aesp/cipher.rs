@@ -1,12 +1,9 @@
-use crate::aes_lib::error::{Error, Result};
-use crate::aes_lib::key::Key;
-use crate::aes_lib::mode::encrypt_ecb_core;
+use crate::aesp::error::{Error, Result};
+use crate::aesp::key::Key;
+use crate::aesp::util::{random_iv, xor_words};
+use crate::aesp::core::constants::{RCON, SBOX};
 
-use crate::aes_lib::core::constants::{RCON, SBOX};
-use crate::aes_lib::util::xor_words;
-
-use crate::aes_lib::mode::*;
-use crate::aes_lib::util::random_iv;
+use crate::aesp::modes::*;
 
 /// Provides encryption and decryption functions for AES in modes [ECB](crate::Cipher::encrypt_ecb), [CTR](crate::Cipher::encrypt_ctr), and [GCM](crate::Cipher::encrypt_gcm).
 /// Instantiated with an AES [Key], which is expanded into round keys and stored in the instance.
@@ -32,12 +29,12 @@ impl Cipher {
     /// Encrypts each 16-byte block entirely independently
     /// and chains them together. **Vulnerable to pattern emergence in the ciphertext.**
     pub fn encrypt_ecb(&self, plaintext: &[u8]) -> Result<Vec<u8>> {
-        encrypt_ecb_core(plaintext, &self.round_keys)
+        ecb_core_enc_serial(plaintext, &self.round_keys)
     }
 
     /// **Electronic codebook** decryption.
     pub fn decrypt_ecb(&self, ciphertext: &[u8]) -> Result<Vec<u8>> {
-        decrypt_ecb_core(ciphertext, &self.round_keys)
+        ecb_core_dec_serial(ciphertext, &self.round_keys)
     }
 
     /// **Counter mode** encryption.
@@ -57,7 +54,7 @@ impl Cipher {
         // generate IV and prepend to ciphertext
         let iv = random_iv()?;
         let mut ciphertext: Vec<u8> = iv.to_vec();
-        ciphertext.append(&mut ctr_core(plaintext, &self.round_keys, &iv, 0)?);
+        ciphertext.append(&mut ctr_core_parallel(plaintext, &self.round_keys, &iv, 0)?);
         Ok(ciphertext)
     }
 
@@ -77,7 +74,7 @@ impl Cipher {
         let mut iv = [0u8; 12];
         iv.copy_from_slice(iv_bytes);
 
-        ctr_core(ciphertext, &self.round_keys, &iv, 0)
+        ctr_core_parallel(ciphertext, &self.round_keys, &iv, 0)
     }
 
     /// **Galois/counter mode** encryption.
@@ -99,7 +96,7 @@ impl Cipher {
         out.extend_from_slice(aad_bytes);
 
         // compute ciphertext and tag
-        let mut ct = ctr_core(plaintext, &self.round_keys, &iv, 2)?;
+        let mut ct = ctr_core_serial(plaintext, &self.round_keys, &iv, 2)?;
         let tag = compute_tag(&ct, &self.round_keys, &iv, aad_bytes)?;
 
         out.append(&mut ct);
@@ -160,7 +157,7 @@ impl Cipher {
         let aad = if !aad.is_empty() { Some(aad) } else { None };
 
         // run ctr starting at 2, as per NIST spec
-        let plaintext = ctr_core(ct, &self.round_keys, &iv, 2)?;
+        let plaintext = ctr_core_serial(ct, &self.round_keys, &iv, 2)?;
         Ok((plaintext, aad))
     }
 

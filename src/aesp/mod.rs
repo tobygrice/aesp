@@ -2,7 +2,7 @@ mod cipher;
 mod core;
 mod error;
 mod key;
-mod mode;
+mod modes;
 mod util;
 
 pub use error::{Error, Result};

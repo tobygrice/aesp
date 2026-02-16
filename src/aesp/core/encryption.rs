@@ -1,5 +1,5 @@
 use super::constants::SBOX;
-use super::core_util::{add_round_key, dbl};
+use super::util::{add_round_key, dbl};
 
 /// Core AES encryption function. Encrypts 16 byte block using provided round keys.
 #[inline(always)]
@@ -80,9 +80,9 @@ pub(crate) fn mix_columns(state: &mut [u8; 16]) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::aes_lib::cipher::Cipher;
-    use crate::aes_lib::key::Key;
-    use crate::aes_lib::error::Result;
+    use crate::aesp::cipher::Cipher;
+    use crate::aesp::key::Key;
+    use crate::aesp::error::Result;
 
     #[test]
     fn test_mix_columns() {

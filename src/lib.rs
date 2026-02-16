@@ -35,6 +35,6 @@
 //! ```
 //! 
 
-mod aes_lib;
+mod aesp;
 
-pub use aes_lib::{Cipher, Error, Key, Result};
+pub use aesp::{Cipher, Error, Key, Result};

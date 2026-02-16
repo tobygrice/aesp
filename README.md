@@ -9,7 +9,7 @@ Library roadmap:
 - [x] Major library API overhaul
 - [ ] Encryption and decryption in parallel
 - [x] In-code library documentation for crates.io
-- [ ] Publish to crates.io
+- [ ] Publish libary
 
 CLI roadmap:
 - [x] CLI using clap, supporting random key generation for encryption
