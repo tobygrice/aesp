@@ -1,5 +1,3 @@
-use crate::aesp::error::*;
-
 pub const PARALLEL_THRESHOLD: usize = 4 * 1024; // encrypt in parallel if input size gt 4 KiB
 const GHASH_R: u128 = 0xE100_0000_0000_0000_0000_0000_0000_0000; // reduction constant for GHASH
 
@@ -38,35 +36,6 @@ pub(crate) fn mul_x4(mut v: u128) -> u128 {
     v = mul_x(v);
     v = mul_x(v);
     v
-}
-
-#[inline(always)]
-pub(crate) fn unpad(input: &mut Vec<u8>) -> Result<()> {
-    if input.is_empty() {
-        return Err(Error::InvalidCiphertext {
-            len: 0,
-            context: "Unpad: attempted to unpad empty input",
-        });
-    }
-
-    let pad = *input.last().unwrap() as usize;
-    if pad == 0 || pad > 16 || pad > input.len() {
-        return Err(Error::InvalidCiphertext {
-            len: input.len(),
-            context: "Unpad: invalid padding length specified by last byte",
-        });
-    }
-
-    let start = input.len() - pad;
-    if !input[start..].iter().all(|&b| b as usize == pad) {
-        return Err(Error::InvalidCiphertext {
-            len: input.len(),
-            context: "Unpad: invalid PKCS#7 padding format",
-        });
-    }
-
-    input.truncate(start);
-    Ok(())
 }
 
 #[cfg(test)]

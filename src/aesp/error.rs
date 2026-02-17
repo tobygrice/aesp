@@ -24,6 +24,10 @@ pub enum Error {
     #[error("invalid ciphertext length: {len} bytes ({context})")]
     InvalidCiphertext { len: usize, context: &'static str },
 
+    /// Provided plaintext that did not match the expected format of the mode of operation.
+    #[error("invalid plaintext length: {len} bytes ({context})")]
+    InvalidPlaintext { len: usize, context: &'static str },
+
     /// OS RNG failed during random key generation.
     #[error("OS RNG failed in random key generation")]
     Rng(#[from] rand_core::OsError),

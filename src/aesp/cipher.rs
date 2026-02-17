@@ -1,7 +1,7 @@
+use crate::aesp::core::constants::{RCON, SBOX};
 use crate::aesp::error::{Error, Result};
 use crate::aesp::key::Key;
-use crate::aesp::util::{random_iv, xor_words};
-use crate::aesp::core::constants::{RCON, SBOX};
+use crate::aesp::util::{random_iv, xor_words, pad, unpad};
 
 use crate::aesp::modes::*;
 
@@ -29,12 +29,14 @@ impl Cipher {
     /// Encrypts each 16-byte block entirely independently
     /// and chains them together. **Vulnerable to pattern emergence in the ciphertext.**
     pub fn encrypt_ecb(&self, plaintext: &[u8]) -> Vec<u8> {
-        ecb_core_enc(plaintext, &self.round_keys)
+        ecb_core_enc(&pad(plaintext), &self.round_keys).unwrap() // safe unwrap, input is always padded
     }
 
     /// **Electronic codebook** decryption.
     pub fn decrypt_ecb(&self, ciphertext: &[u8]) -> Result<Vec<u8>> {
-        ecb_core_dec(ciphertext, &self.round_keys)
+        let mut ct = ecb_core_dec(ciphertext, &self.round_keys)?;
+        unpad(&mut ct)?;
+        Ok(ct)
     }
 
     /// **Counter mode** encryption.
@@ -172,7 +174,7 @@ impl Cipher {
     }
 
     /// AES key schedule. Returns a vector of 11, 13, or 15 round keys, corresponding with AES-128, AES-192,
-    /// and AES-256, respectively. The extra round key is the initial round key, which is not counted in most 
+    /// and AES-256, respectively. The extra round key is the initial round key, which is not counted in most
     /// documentation as it is simply the original key.
     fn expand_key(key: &Key) -> Vec<[u8; 16]> {
         let key = key.as_bytes();
@@ -238,6 +240,7 @@ impl Cipher {
 
 #[cfg(feature = "test-vectors")]
 impl Cipher {
+    /// Encrypt GCM with provided IV.
     pub fn encrypt_gcm_with_iv(
         &self,
         plaintext: &[u8],
@@ -263,8 +266,17 @@ impl Cipher {
         out.extend_from_slice(&tag);
         Ok(out)
     }
-}
 
+    /// Encrypt ECB with no padding. Input must be a multiple of 16 bytes.
+    pub fn encrypt_ecb_raw(&self, plaintext: &[u8]) -> Result<Vec<u8>> {
+        ecb_core_enc(plaintext, &self.round_keys)
+    }
+
+    /// Decrypt ECB with no padding. Input must be a multiple of 16 bytes.
+    pub fn decrypt_ecb_raw(&self, ciphertext: &[u8]) -> Result<Vec<u8>> {
+        ecb_core_dec(ciphertext, &self.round_keys)
+    }
+}
 
 #[cfg(test)]
 mod tests {

@@ -1,8 +1,8 @@
 #[macro_use]
-#[path = "../common.rs"]
-mod common;
+#[path = "../gcm_tests.rs"]
+mod gcm_tests;
 
-use self::common::TestVector;
+use self::gcm_tests::TestVector;
 use hex_literal::hex;
 
 use aesp::{Cipher, Key};

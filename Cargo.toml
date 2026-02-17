@@ -24,3 +24,8 @@ required-features = ["test-vectors"]
 name = "aes256gcm"
 path = "tests/vectors/aes256gcm.rs"
 required-features = ["test-vectors"]
+
+[[test]]
+name = "ecb_tests"
+path = "tests/ecb_tests.rs"
+required-features = ["test-vectors"]

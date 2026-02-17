@@ -1,3 +1,7 @@
+#![cfg(feature = "test-vectors")]
+
+// this file written by an LLM
+
 /// Test vectors for GCM. Test code from https://github.com/RustCrypto/AEADs/tree/master/aes-gcm/tests
 #[derive(Debug)]
 pub struct TestVector<K: 'static, N: 'static> {
@@ -32,7 +36,7 @@ macro_rules! gcm_tests {
                 let cipher = Cipher::new(&key);
 
                 // Build message format: iv || aad_len || aad || ciphertext || tag
-                let msg = crate::common::pack_message(vector.nonce, vector.aad, vector.ciphertext, vector.tag);
+                let msg = crate::gcm_tests::pack_message(vector.nonce, vector.aad, vector.ciphertext, vector.tag);
 
                 let (pt, aad_out) = cipher
                     .decrypt_gcm(&msg)
@@ -56,7 +60,7 @@ macro_rules! gcm_tests {
                     .expect("invalid test key bytes for this implementation");
                 let cipher = Cipher::new(&key);
 
-                let mut msg = crate::common::pack_message(vector.nonce, vector.aad, vector.ciphertext, vector.tag);
+                let mut msg = crate::gcm_tests::pack_message(vector.nonce, vector.aad, vector.ciphertext, vector.tag);
 
                 // Flip a bit in the tag (last byte)
                 let last = msg.len() - 1;
@@ -73,7 +77,7 @@ macro_rules! gcm_tests {
                     .expect("invalid test key bytes for this implementation");
                 let cipher = Cipher::new(&key);
 
-                let mut msg = crate::common::pack_message(vector.nonce, vector.aad, vector.ciphertext, vector.tag);
+                let mut msg = crate::gcm_tests::pack_message(vector.nonce, vector.aad, vector.ciphertext, vector.tag);
 
                 // If ciphertext is non-empty, flip first ciphertext byte.
                 // Otherwise flip IV[0] (still should fail tag check).
@@ -97,7 +101,7 @@ macro_rules! gcm_tests {
 
                 let got = cipher.encrypt_gcm_with_iv(vector.plaintext, Some(vector.aad), vector.nonce).expect("encrypt should succeed");
 
-                let expected = crate::common::pack_message(vector.nonce, vector.aad, vector.ciphertext, vector.tag);
+                let expected = crate::gcm_tests::pack_message(vector.nonce, vector.aad, vector.ciphertext, vector.tag);
                 assert_eq!(expected, got);
             }
         }

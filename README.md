@@ -4,7 +4,7 @@
 
 An AES library targeting performance through parallelism.
 
-Supported modes are ECB, CBC, and GCM. A clean CLI is also packaged with this repo for demonstration.
+Supported modes are ECB, CTR, and GCM. A clean CLI is also packaged with this repo for demonstration.
 
 This is a personal project - use at your own risk!
 
