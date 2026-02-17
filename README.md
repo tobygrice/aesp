@@ -2,8 +2,9 @@
 
 ## About
 
-An AES library targeting performance through parallelism. Supported modes are ECB, CBC, and GCM.
-A clean CLI is also packaged with this repo for demonstration.
+An AES library targeting performance through parallelism.
+
+Supported modes are ECB, CBC, and GCM. A clean CLI is also packaged with this repo for demonstration.
 
 This is a personal project - use at your own risk!
 
@@ -35,7 +36,7 @@ The API exports two structs:
 - `AesKey` - stores key bytes, used to instantiate an `AesCipher`
 - `AesCipher` - stores round keys and provides encryption/decryption functions
 
-As well as an `AesError` and `Result` type.
+A `Result` type containing an `AesError` is also exported, which is returned by most encryption/decryption functions.
 
 ### Examples
 
