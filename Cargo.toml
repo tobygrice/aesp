@@ -1,8 +1,8 @@
 [package]
 name = "aesp"
-version = "1.0.0"
+version = "0.1.1"
 authors = ["Toby Grice"]
-description = "Intuitive API for AES in parallel. Personal project - use at your own risk."
+description = "Library and optional CLI for AES in parallel. Personal project -- use at your own risk."
 edition = "2024"
 license = "MIT OR Apache-2.0"
 readme = "README.md"

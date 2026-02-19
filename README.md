@@ -4,30 +4,79 @@
 
 An AES library targeting performance through parallelism.
 
-Supported modes are ECB, CTR, and GCM. A CLI binary is also available, use `--features cli` to include.
+Supported modes are ECB, CTR, and GCM. A CLI binary is also available as an optional feature.
 
-This is a personal project - not intended for production, use at your own risk!
+Library documentation is available on [docs.rs](docs.rs/aesp).
 
-## Features
+This is a personal project, not intended for production -- use at your own risk!
 
-Library roadmap:
+## CLI Usage
 
-- [x] AES encryption and decryption in ECB mode with PKCS#7 padding
-- [x] Robust library error handling using `thiserror` crate
-- [x] Counter mode of operation (CTR)
-- [x] Galois/counter mode (GCM) for message authentication
-- [x] GCM with additional authenticated data (AAD)
-- [x] Major library API overhaul
-- [x] Encryption and decryption in parallel for all modes
-- [x] In-code library documentation for crates.io
-- [x] Extensive integration tests from public sources
-- [x] Publish libary
+The CLI tool can installed using `cargo`:
 
-CLI roadmap:
+```bash
+cargo install aesp --features cli
+```
 
-- [x] CLI using clap, supporting random key generation for encryption
-- [x] Specify mode of operation
-- [x] Accept AAD for GCM and print AAD to stdout when decrypting
+If you would prefer not to use `cargo`, you can download the binaries from the [releases page](https://github.com/tobygrice/aesp/releases) on GitHub.
+
+Once installed, usage is simple:
+
+```bash
+aesp encrypt -i plaintext.txt -o ciphertext -k keyfile --gen-key
+aesp decrypt -i ciphertext -o decrypted.txt -k keyfile
+```
+
+The `help` command prints the following:
+
+```plaintext
+Usage: aesp <COMMAND>
+
+Commands:
+  encrypt  Encrypt input to output
+  decrypt  Decrypt input to output
+  help     Print this message or the help of the given subcommand(s)
+
+Options:
+  -h, --help     Print help
+  -V, --version  Print version
+```
+
+### Encryption
+
+Encryption usage is as follows:
+
+```plaintext
+Encrypt input to output
+
+Usage: aesp encrypt [OPTIONS] --input <INPUT> --output <OUTPUT> --key <KEY>
+
+Options:
+  -m, --mode <MODE>          Mode of operation [default: gcm] [possible values: ecb, ctr, gcm]
+  -i, --input <INPUT>        Input file path
+  -o, --output <OUTPUT>      Output file path
+  -k, --key <KEY>            Key file path
+      --gen-key              Generate a random key (written to path specified by key)
+      --key-size <KEY_SIZE>  Only valid with --gen-key [default: 256] [possible values: 128, 192, 256]
+      --aad <HEX>            Additional authenticated data, provided as hex string (optional, GCM only)
+  -h, --help                 Print help
+```
+
+### Decryption
+
+Decryption usage is as follows:
+
+```plaintext
+Decrypt input to output
+
+Usage: aesp decrypt --input <INPUT> --output <OUTPUT> --key <KEY>
+
+Options:
+  -i, --input <INPUT>    Input file path
+  -o, --output <OUTPUT>  Output file path
+  -k, --key <KEY>        Key file path
+  -h, --help             Print help
+```
 
 ## Library Usage
 
@@ -77,49 +126,32 @@ assert_eq!(plaintext, gcm_plaintext);
 assert_eq!(Some(aad), res_aad);
 ```
 
-## CLI Usage
+## Features Roadmap (complete)
 
-```plaintext
-Usage: aes.exe <COMMAND>
+Library roadmap:
 
-Commands:
-  encrypt  Encrypt input to output
-  decrypt  Decrypt input to output
-  help     Print this message or the help of the given subcommand(s)
+- [x] AES encryption and decryption in ECB mode with PKCS#7 padding
+- [x] Robust library error handling using `thiserror` crate
+- [x] Counter mode of operation (CTR)
+- [x] Galois/counter mode (GCM) for message authentication
+- [x] GCM with additional authenticated data (AAD)
+- [x] Intuitive library API
+- [x] Encryption and decryption in parallel for all modes
+- [x] In-code library documentation for docs.rs
+- [x] Extensive integration tests from public sources
+- [x] Publish to crates.io
 
-Options:
-  -h, --help     Print help
-  -V, --version  Print version
-```
+CLI roadmap:
 
-### Encryption
+- [x] CLI using clap, supporting random key generation for encryption
+- [x] Specify mode of operation
+- [x] Accept AAD for GCM and print AAD to stdout when decrypting
 
-```plaintext
-Encrypt input to output
+## License
 
-Usage: aes.exe encrypt [OPTIONS] --input <INPUT> --output <OUTPUT> --key <KEY>
+Licensed under either of:
 
-Options:
-  -m, --mode <MODE>          Mode of operation [default: gcm] [possible values: ecb, ctr, gcm]
-  -i, --input <INPUT>        Input file path
-  -o, --output <OUTPUT>      Output file path
-  -k, --key <KEY>            Key file path
-      --gen-key              Generate a random key (written to path specified by key)
-      --key-size <KEY_SIZE>  Only valid with --gen-key [default: 256] [possible values: 128, 192, 256]
-      --aad <HEX>            Additional authenticated data, provided as hex string (optional, GCM only)
-  -h, --help                 Print help
-```
+- [Apache License, Version 2.0](https://www.apache.org/licenses/LICENSE-2.0)
+- [MIT license](https://opensource.org/license/MIT)
 
-### Decryption
-
-```plaintext
-Decrypt input to output
-
-Usage: aes.exe decrypt --input <INPUT> --output <OUTPUT> --key <KEY>
-
-Options:
-  -i, --input <INPUT>    Input file path
-  -o, --output <OUTPUT>  Output file path
-  -k, --key <KEY>        Key file path
-  -h, --help             Print help
-```
+at your option.
