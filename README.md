@@ -4,9 +4,9 @@
 
 An AES library targeting performance through parallelism.
 
-Supported modes are ECB, CTR, and GCM. A clean CLI is also packaged with this repo for demonstration.
+Supported modes are ECB, CTR, and GCM. A CLI binary is also available, use `--features cli` to include.
 
-This is a personal project - use at your own risk!
+This is a personal project - not intended for production, use at your own risk!
 
 ## Features
 
@@ -21,7 +21,7 @@ Library roadmap:
 - [x] Encryption and decryption in parallel for all modes
 - [x] In-code library documentation for crates.io
 - [x] Extensive integration tests from public sources
-- [ ] Publish libary
+- [x] Publish libary
 
 CLI roadmap:
 
@@ -44,7 +44,7 @@ A `Result` type containing an `AesError` is also exported, which is returned by 
 use aesp::{Key, Cipher};
 
 // generate a random 256-bit key. Also available: try_from_slice, rand_key_128, and rand_key_192.
-let key = Key::rand_key_256().expect("Random key generation failed");
+let key = Key::rand_key_256()?;
 
 // instantiate a cipher object using that key.
 let cipher = Cipher::new(&key);
@@ -54,25 +54,25 @@ let plaintext = ("Hello, World!").as_bytes();
 
 // encrypt the plaintext bytes using AES-256-CTR.
 // note that the key size does not need to be explicitly stated.
-let ctr_ciphertext = cipher.encrypt_ctr(plaintext).expect("Counter overflow");
+let ctr_ciphertext = cipher.encrypt_ctr(plaintext)?;
 
 // decrypt the resultant ciphertext.
-let ctr_plaintext = cipher.decrypt_ctr(&ctr_ciphertext).expect("Counter overflow");
+let ctr_plaintext = cipher.decrypt_ctr(&ctr_ciphertext)?;
 
 // round trip results in the same plaintext as the original message.
 assert_eq!(plaintext, ctr_plaintext); 
 
 // for ECB mode:
 let ecb_ciphertext = cipher.encrypt_ecb(plaintext);
-let ecb_plaintext = cipher.decrypt_ecb(&ecb_ciphertext).expect("Invalid ciphertext");
+let ecb_plaintext = cipher.decrypt_ecb(&ecb_ciphertext)?;
 assert_eq!(plaintext, ecb_plaintext);
 
 // for GCM: 
 let aad = vec![0xDE, 0xAD, 0xBE, 0xEF]; // encrypt GCM takes AAD as an Option<&[u8]>.
-let gcm_ciphertext = cipher.encrypt_gcm(plaintext, Some(&aad)).expect("Counter overflow");
+let gcm_ciphertext = cipher.encrypt_gcm(plaintext, Some(&aad))?;
 
 // decrypt GCM returns a tuple containing (plaintext, aad), where aad is an Option<Vec[u8]>.
-let (gcm_plaintext, res_aad) = cipher.decrypt_gcm(&gcm_ciphertext).expect("Invalid tag or counter overflow");
+let (gcm_plaintext, res_aad) = cipher.decrypt_gcm(&gcm_ciphertext)?;
 assert_eq!(plaintext, gcm_plaintext);
 assert_eq!(Some(aad), res_aad);
 ```

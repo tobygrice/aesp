@@ -1,4 +1,4 @@
-// prefixed with buffer byte to allow 1-based indexing (matches NIST FIPS-197 specification)
+// prefixed with buffer byte to permit 1-based indexing (allows code to match NIST FIPS-197 specification)
 pub(crate) const RCON: [u8; 11] = [0x00, 0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40, 0x80, 0x1B, 0x36];
 
 pub(crate) const SBOX: [u8; 256] = [

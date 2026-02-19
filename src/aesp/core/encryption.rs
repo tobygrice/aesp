@@ -93,9 +93,7 @@ pub(crate) fn mix_columns(state: &mut [u8; 16]) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::aesp::cipher::Cipher;
-    use crate::aesp::key::Key;
-    use crate::aesp::error::Result;
+    use crate::{Cipher, Key, Result};
 
     #[test]
     fn test_mix_columns() {
@@ -193,7 +191,7 @@ mod tests {
 
         let key = Key::try_from_slice(&key)?;
         let cipher = Cipher::new(&key);
-        let actual = encrypt_block(&plaintext, cipher.get_round_keys());
+        let actual = encrypt_block(&plaintext, cipher.round_keys());
 
         assert_eq!(actual, expected, "incorrect AES-256 encryption of block");
         Ok(())
@@ -233,7 +231,7 @@ mod tests {
 
         let key = Key::try_from_slice(&key)?;
         let cipher = Cipher::new(&key);
-        let actual = encrypt_block(&plaintext, cipher.get_round_keys());
+        let actual = encrypt_block(&plaintext, cipher.round_keys());
 
         assert_eq!(actual, expected, "incorrect AES-192 encryption of block");
         Ok(())
@@ -272,7 +270,7 @@ mod tests {
 
         let key = Key::try_from_slice(&key)?;
         let cipher = Cipher::new(&key);
-        let actual = encrypt_block(&plaintext, cipher.get_round_keys());
+        let actual = encrypt_block(&plaintext, cipher.round_keys());
 
         assert_eq!(actual, expected, "incorrect AES-128 encryption of block");
         Ok(())

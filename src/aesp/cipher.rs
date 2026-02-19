@@ -1,12 +1,27 @@
 use crate::aesp::core::constants::{RCON, SBOX};
 use crate::aesp::error::{Error, Result};
 use crate::aesp::key::Key;
-use crate::aesp::util::{random_iv, xor_words, pad, unpad};
+use crate::aesp::util::{random_iv, pad, unpad};
 
 use crate::aesp::modes::*;
 
 /// Provides encryption and decryption functions for AES in modes [ECB](crate::Cipher::encrypt_ecb), [CTR](crate::Cipher::encrypt_ctr), and [GCM](crate::Cipher::encrypt_gcm).
 /// Instantiated with an AES [Key], which is expanded into round keys and stored in the instance.
+/// 
+/// ## Examples
+/// ```
+/// # fn main() -> aesp::Result<()> {
+/// use aesp::{Key, Cipher};
+/// 
+/// // Instantiate random key:
+/// let rk_256 = Key::rand_key_256()?;
+/// 
+/// // Instantiate AESP cipher using the key:
+/// let cipher = Cipher::new(&rk_256);
+/// # Ok(())
+/// # }
+/// ```
+#[derive(Clone, Eq, PartialEq, Debug)]
 pub struct Cipher {
     round_keys: Vec<[u8; 16]>,
 }
@@ -20,19 +35,49 @@ impl Cipher {
     }
 
     /// Getter for internal round keys. Returned as a slice of 16-byte arrays.
-    pub fn get_round_keys(&self) -> &[[u8; 16]] {
+    pub fn round_keys(&self) -> &[[u8; 16]] {
         &self.round_keys
     }
 
     /// **Electronic codebook** encryption.
     ///
-    /// Encrypts each 16-byte block entirely independently
-    /// and chains them together. **Vulnerable to pattern emergence in the ciphertext.**
+    /// Encrypts each 16-byte block entirely independently and chains them together. 
+    /// Pads input to a multiple of 16 bytes using PKCS#7 padding.
+    /// **Vulnerable to pattern emergence in the ciphertext.**
+    /// 
+    /// ## Examples
+    /// ```
+    /// # fn main() -> aesp::Result<()> {
+    /// # use aesp::{Key, Cipher};
+    /// # let rk_256 = Key::rand_key_256()?;
+    /// # let cipher = Cipher::new(&rk_256);
+    /// let plaintext = ("Hello, World!").as_bytes();
+    /// let ciphertext = cipher.encrypt_ecb(&plaintext);
+    /// # Ok(())
+    /// # }
+    /// ```
     pub fn encrypt_ecb(&self, plaintext: &[u8]) -> Vec<u8> {
         ecb_core_enc(&pad(plaintext), &self.round_keys).unwrap() // safe unwrap, input is always padded
     }
 
     /// **Electronic codebook** decryption.
+    /// 
+    /// Assumes plaintext was PKCS#7 padded before encryption and unpads automatically.
+    /// Throws error if last block does not match PKCS#7 format or input is not a multiple of 16 bytes.
+    /// 
+    /// ## Examples
+    /// ```
+    /// # fn main() -> aesp::Result<()> {
+    /// # use aesp::{Key, Cipher};
+    /// # let rk_256 = Key::rand_key_256()?;
+    /// # let cipher = Cipher::new(&rk_256);
+    /// let plaintext = ("Hello, World!").as_bytes();
+    /// let ciphertext = cipher.encrypt_ecb(&plaintext);
+    /// let decrypted = cipher.decrypt_ecb(&ciphertext)?;
+    /// assert_eq!(decrypted, plaintext);
+    /// # Ok(())
+    /// # }
+    /// ```
     pub fn decrypt_ecb(&self, ciphertext: &[u8]) -> Result<Vec<u8>> {
         let mut ct = ecb_core_dec(ciphertext, &self.round_keys)?;
         unpad(&mut ct)?;
@@ -52,6 +97,18 @@ impl Cipher {
     /// sufficiently large to assume uniqueness when randomly generated.
     ///
     /// Output is formatted as `IV (12 bytes) || Ciphertext`
+    /// 
+    /// ## Examples
+    /// ```
+    /// # fn main() -> aesp::Result<()> {
+    /// # use aesp::{Key, Cipher};
+    /// # let rk_256 = Key::rand_key_256()?;
+    /// # let cipher = Cipher::new(&rk_256);
+    /// let plaintext = ("Hello, World!").as_bytes();
+    /// let ciphertext = cipher.encrypt_ctr(&plaintext)?;
+    /// # Ok(())
+    /// # }
+    /// ```
     pub fn encrypt_ctr(&self, plaintext: &[u8]) -> Result<Vec<u8>> {
         // generate IV and prepend to ciphertext
         let iv = random_iv()?;
@@ -64,6 +121,20 @@ impl Cipher {
     /// **Counter mode** decryption.
     ///
     /// Assumes format matches output of encryption: `IV (12 bytes) || Ciphertext`
+    /// 
+    /// ## Examples
+    /// ```
+    /// # fn main() -> aesp::Result<()> {
+    /// # use aesp::{Key, Cipher};
+    /// # let rk_256 = Key::rand_key_256()?;
+    /// # let cipher = Cipher::new(&rk_256);
+    /// let plaintext = ("Hello, World!").as_bytes();
+    /// let ciphertext = cipher.encrypt_ctr(&plaintext)?;
+    /// let decrypted = cipher.decrypt_ctr(&ciphertext)?;
+    /// assert_eq!(decrypted, plaintext);
+    /// # Ok(())
+    /// # }
+    /// ```
     pub fn decrypt_ctr(&self, ciphertext: &[u8]) -> Result<Vec<u8>> {
         // extract and remove IV from ciphertext
         if ciphertext.len() < 12 {
@@ -89,6 +160,21 @@ impl Cipher {
     /// tag but **not encrypted**.
     ///
     /// Output is formatted as `IV (12 bytes) || AAD length (4 bytes) || AAD || Ciphertext || Tag (16 bytes)`
+    /// 
+    /// ## Examples
+    /// ```
+    /// # fn main() -> aesp::Result<()> {
+    /// # use aesp::{Key, Cipher};
+    /// # let rk_256 = Key::rand_key_256()?;
+    /// # let cipher = Cipher::new(&rk_256);
+    /// let plaintext = ("Hello, World!").as_bytes();
+    /// let aad = ("Some data to be authenticated but not encrypted").as_bytes();
+    ///
+    /// let ciphertext_with_aad = cipher.encrypt_gcm(plaintext, Some(aad))?;
+    /// let ciphertext_no_aad = cipher.encrypt_gcm(plaintext, None)?;
+    /// # Ok(())
+    /// # }
+    /// ```
     pub fn encrypt_gcm(&self, plaintext: &[u8], aad: Option<&[u8]>) -> Result<Vec<u8>> {
         // generate random IV
         let iv = random_iv()?;
@@ -118,7 +204,7 @@ impl Cipher {
 
     /// **Galois/counter mode** decryption.
     ///
-    /// Assumes input follows the same format as [encryption](crate::aes_lib::cipher::Cipher::encrypt_gcm):
+    /// Assumes input follows the same format as [encryption](crate::Cipher::encrypt_gcm):
     /// `IV (12 bytes) || AAD length (4 bytes) || AAD || Ciphertext || Tag (16 bytes)`
     ///
     /// Returns:
@@ -126,6 +212,30 @@ impl Cipher {
     /// - [AuthFailed](crate::Error::AuthFailed) error if computed tag did not match input tag.
     /// - [CounterOverflow](crate::Error::CounterOverflow) error if more than 2^32 blocks were provided.
     /// - [InvalidCiphertext](crate::Error::InvalidCiphertext) error if ciphertext does not match expected format.
+    /// 
+    /// ## Examples
+    /// ```
+    /// # fn main() -> aesp::Result<()> {
+    /// # use aesp::{Key, Cipher};
+    /// # let rk_256 = Key::rand_key_256()?;
+    /// # let cipher = Cipher::new(&rk_256);
+    /// let plaintext = ("Hello, World!").as_bytes();
+    /// let aad = ("Some data to be authenticated but not encrypted").as_bytes();
+    ///
+    /// // Decryption with AAD
+    /// let ciphertext = cipher.encrypt_gcm(plaintext, Some(aad))?;
+    /// let (decrypted, returned_aad) = cipher.decrypt_gcm(&ciphertext)?;
+    ///
+    /// assert_eq!(decrypted, plaintext);
+    /// assert_eq!(returned_aad, Some(aad.to_vec()));
+    ///
+    /// // Decryption without AAD
+    /// let ciphertext = cipher.encrypt_gcm(plaintext, None)?;
+    /// let (_, returned_aad) = cipher.decrypt_gcm(&ciphertext)?;
+    /// assert!(returned_aad.is_none());
+    /// # Ok(())
+    /// # }
+    /// ```
     pub fn decrypt_gcm(&self, ciphertext: &[u8]) -> Result<(Vec<u8>, Option<Vec<u8>>)> {
         // minimum size is 32 bytes -> 12 (iv) + 4 (aad_len) + 16 (tag)
         if ciphertext.len() < 32 {
@@ -218,7 +328,10 @@ impl Cipher {
             }
 
             // w[i] = temp ⊕ w[i − Nk]
-            w[i] = xor_words(&temp, &w[i - nk]);
+            for b in 0..4 {
+                w[i][b] = temp[b] ^ w[i - nk][b];
+            }
+            
             temp = w[i]; // update temp
         }
 
@@ -240,7 +353,8 @@ impl Cipher {
 
 #[cfg(feature = "test-vectors")]
 impl Cipher {
-    /// Encrypt GCM with provided IV.
+    /// Encrypt GCM with provided IV. 
+    /// Only compiled when test-vectors feature is enabled.
     pub fn encrypt_gcm_with_iv(
         &self,
         plaintext: &[u8],
@@ -268,11 +382,13 @@ impl Cipher {
     }
 
     /// Encrypt ECB with no padding. Input must be a multiple of 16 bytes.
+    /// Only compiled when test-vectors feature is enabled.
     pub fn encrypt_ecb_raw(&self, plaintext: &[u8]) -> Result<Vec<u8>> {
         ecb_core_enc(plaintext, &self.round_keys)
     }
 
     /// Decrypt ECB with no padding. Input must be a multiple of 16 bytes.
+    /// Only compiled when test-vectors feature is enabled.
     pub fn decrypt_ecb_raw(&self, ciphertext: &[u8]) -> Result<Vec<u8>> {
         ecb_core_dec(ciphertext, &self.round_keys)
     }

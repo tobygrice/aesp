@@ -2,18 +2,30 @@
 name = "aesp"
 version = "1.0.0"
 authors = ["Toby Grice"]
-description = "AES parallel encryption/decryption library | Toby Grice"
+description = "Intuitive API for AES in parallel. Personal project - use at your own risk."
 edition = "2024"
+license = "MIT OR Apache-2.0"
+readme = "README.md"
+repository = "https://github.com/tobygrice/aesp"
+keywords = ["aes", "crypto", "gcm", "ctr", "aes-gcm"]
+categories = ["cryptography"]
 
 [dependencies]
-clap = { version = "4.5.56", features = ["derive"] }
+clap = { version = "4.5.56", features = ["derive"], optional = true }
 hex-literal = { version = "1.1.0", optional = true }
 rand = "0.9.2"
 rayon = "1.11.0"
 thiserror = "2.0.18"
 
 [features]
+default = []
+cli = ["dep:clap"]
 test-vectors = ["dep:hex-literal"]
+
+[[bin]]
+name = "aesp"
+path = "src/main.rs"
+required-features = ["cli"]
 
 [[test]]
 name = "aes128gcm"

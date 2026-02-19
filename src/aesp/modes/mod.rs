@@ -1,3 +1,5 @@
+//! Core mode of operation implementations
+
 mod ecb;
 mod ctr;
 mod gcm;

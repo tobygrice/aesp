@@ -1,27 +1,19 @@
-pub const PARALLEL_THRESHOLD: usize = 4 * 1024; // encrypt in parallel if input size gt 4 KiB
+pub const PARALLEL_THRESHOLD: usize = 4 * 1024; // encrypt in parallel if input size exceeds 4 KiB
 const GHASH_R: u128 = 0xE100_0000_0000_0000_0000_0000_0000_0000; // reduction constant for GHASH
 
 #[inline(always)]
 pub(crate) fn ctr_block(iv: &[u8; 12], ctr: u32) -> [u8; 16] {
     let cb = ctr.to_be_bytes();
     [
-        iv[00], iv[01], iv[02], iv[03], iv[04], iv[05], iv[06], iv[07], iv[08], iv[09], iv[10],
-        iv[11], cb[00], cb[01], cb[02], cb[03],
+        iv[00], iv[01], iv[02], iv[03], //
+        iv[04], iv[05], iv[06], iv[07], //
+        iv[08], iv[09], iv[10], iv[11], //
+        cb[00], cb[01], cb[02], cb[03], //
     ]
 }
 
 #[inline(always)]
-pub(crate) fn xor_chunks(y: &[u8; 16], chunk: &[u8]) -> [u8; 16] {
-    let mut out: [u8; 16] = *y;
-    for i in 0..chunk.len() {
-        out[i] ^= chunk[i];
-    }
-    out
-}
-
-#[inline(always)]
 pub(crate) fn mul_x(v: u128) -> u128 {
-    // Multiply by x (in the GHASH field representation)
     let lsb = v & 1;
     let mut v2 = v >> 1;
     v2 ^= GHASH_R & (0u128.wrapping_sub(lsb));
@@ -30,7 +22,6 @@ pub(crate) fn mul_x(v: u128) -> u128 {
 
 #[inline(always)]
 pub(crate) fn mul_x4(mut v: u128) -> u128 {
-    // Multiply by x^4 (4 successive mul_x)
     v = mul_x(v);
     v = mul_x(v);
     v = mul_x(v);

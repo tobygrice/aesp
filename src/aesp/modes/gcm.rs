@@ -1,6 +1,6 @@
 use crate::aesp::core::encrypt_block;
 use crate::aesp::error::*;
-use crate::aesp::modes::util::{ctr_block, mul_x, mul_x4, xor_chunks};
+use crate::aesp::modes::util::{ctr_block, mul_x, mul_x4};
 
 /*
 https://csrc.nist.rip/groups/ST/toolkit/BCM/documents/proposedmodes/gcm/gcm-spec.pdf
@@ -22,7 +22,7 @@ where J0 is:
     - IV || 1u32 (initial ctr block for ctr = 1)
 */
 
-/// Function to compute GCM cryptographic tag from ciphertext + AAD
+/// Function to compute GCM cryptographic tag from AAD + ciphertext
 pub fn compute_tag(
     ciphertext: &[u8],
     round_keys: &[[u8; 16]],
@@ -55,20 +55,23 @@ pub fn compute_tag(
     len[..8].copy_from_slice(&aad_size.to_be_bytes());
     len[8..].copy_from_slice(&ct_size.to_be_bytes());
 
-    // s = (s xor len) * H
+    // s = (s + len) * H
     for i in 0..16 {
         s[i] ^= len[i];
     }
-    s = gkey.mul(s);
+    s = gkey.mul_h(s);
 
-    // tag = E(K, J0) ^ S
-    Ok(xor_chunks(&s, &j0_e))
+    // tag = E(K, J0) + S
+    for i in 0..16 {
+        s[i] ^= j0_e[i];
+    }
+
+    Ok(s)
 }
 
 
-/// Precomputed tables for fast GHASH multiplication by fixed H. This struct written with LLM assistance.
+/// Precompute tables for mul by H. Struct written with LLM assistance.
 struct GHashKey {
-    // 32 nibbles across 16 bytes, each nibble 0..15 contributes a u128
     table: [[u128; 16]; 32],
 }
 
@@ -110,14 +113,14 @@ impl GHashKey {
             for i in 0..chunk.len() {
                 s[i] ^= chunk[i];
             }
-            s = self.mul(s);
+            s = self.mul_h(s);
         }
         s
     }
 
     /// Compute x * H (GHASH field multiply) using the precomputed table.
     #[inline(always)]
-    fn mul(&self, x: [u8; 16]) -> [u8; 16] {
+    fn mul_h(&self, x: [u8; 16]) -> [u8; 16] {
         let mut z = 0u128;
         let mut pos = 0usize;
 
@@ -138,8 +141,7 @@ impl GHashKey {
 #[cfg(test)]
 mod test_gcm {
     use super::*;
-    use crate::aesp::cipher::Cipher;
-    use crate::aesp::key::Key;
+    use crate::{Cipher, Key};
     use crate::aesp::modes::util::test_util::{hex_to_arr_12, hex_to_arr_16, hex_to_bytes};
 
     // all test vectors from
@@ -160,7 +162,7 @@ mod test_gcm {
 
         let key = Key::try_from_slice(&key)?;
         let cipher = Cipher::new(&key);
-        let tag = compute_tag(&ciphertext, cipher.get_round_keys(), &iv, &aad).unwrap();
+        let tag = compute_tag(&ciphertext, cipher.round_keys(), &iv, &aad).unwrap();
         assert_eq!(tag, hex_to_arr_16("58e2fccefa7e3061367f1d57a4e7455a"));
 
         Ok(())
@@ -182,7 +184,7 @@ mod test_gcm {
 
         let key = Key::try_from_slice(&key)?;
         let cipher = Cipher::new(&key);
-        let tag = compute_tag(&ciphertext, cipher.get_round_keys(), &iv, &aad).unwrap();
+        let tag = compute_tag(&ciphertext, cipher.round_keys(), &iv, &aad).unwrap();
         assert_eq!(tag, hex_to_arr_16("ab6e47d42cec13bdf53a67b21257bddf"));
 
         Ok(())
@@ -208,7 +210,7 @@ mod test_gcm {
 
         let key = Key::try_from_slice(&key)?;
         let cipher = Cipher::new(&key);
-        let tag = compute_tag(&ciphertext, cipher.get_round_keys(), &iv, &aad).unwrap();
+        let tag = compute_tag(&ciphertext, cipher.round_keys(), &iv, &aad).unwrap();
         assert_eq!(tag, hex_to_arr_16("4d5c2af327cd64a62cf35abd2ba6fab4"));
 
         Ok(())
@@ -234,7 +236,7 @@ mod test_gcm {
 
         let key = Key::try_from_slice(&key)?;
         let cipher = Cipher::new(&key);
-        let tag = compute_tag(&ciphertext, cipher.get_round_keys(), &iv, &aad).unwrap();
+        let tag = compute_tag(&ciphertext, cipher.round_keys(), &iv, &aad).unwrap();
         assert_eq!(tag, hex_to_arr_16("5bc94fbc3221a5db94fae95ae7121a47"));
 
         Ok(())

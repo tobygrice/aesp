@@ -2,10 +2,9 @@ use rayon::prelude::*;
 
 use crate::aesp::core::encrypt_block;
 use crate::aesp::error::*;
-use crate::aesp::modes::util::{ctr_block, xor_chunks};
+use crate::aesp::modes::util::ctr_block;
 
-
-/// Core counter encryption and decryption algorithm.
+/// Core counter encryption and decryption implementation.
 pub fn ctr_core(
     input: &[u8],
     round_keys: &[[u8; 16]],
@@ -15,50 +14,48 @@ pub fn ctr_core(
     if input.is_empty() {
         return Ok(Vec::new());
     }
-    
-    // check for counter overflow
+
+    // check if counter will overflow
     let num_blocks = u32::try_from((input.len() + 15) / 16).map_err(|_| Error::CounterOverflow)?;
     ctr_start
         .checked_add(num_blocks - 1)
         .ok_or(Error::CounterOverflow)?;
 
-    // encrypt in parallel if feature enabled and size exceeds threshold
+    let mut output = vec![0u8; input.len()];
     if input.len() > crate::aesp::modes::util::PARALLEL_THRESHOLD {
-        let mut output = vec![0u8; input.len()];
+        // encrypt in parallel if size exceeds threshold
         output
             .par_chunks_mut(16)
             .zip(input.par_chunks(16))
             .enumerate()
             .for_each(|(i, (out_chunk, in_chunk))| {
-                let ctr = ctr_start.wrapping_add(i as u32); // safe due to pre-check
-                let block = ctr_block(iv, ctr);
+                let ctr = ctr_start + i as u32; // overflow already checked above
+                let block = ctr_block(iv, ctr); // form block from iv + ctr
+                // xor each element of input chunk (1-16 bytes) with encrypted ctr block
                 let keystream = encrypt_block(&block, round_keys);
 
-                // XOR only actual bytes (last chunk may be < 16)
+                // XOR bytes of block (last chunk may be lt 16)
                 for j in 0..in_chunk.len() {
                     out_chunk[j] = keystream[j] ^ in_chunk[j];
                 }
             });
+    } else {
+        // input len below threshold, encrypt serially
+        output
+            .chunks_mut(16)
+            .zip(input.chunks(16))
+            .enumerate()
+            .for_each(|(i, (out_chunk, in_chunk))| {
+                let ctr = ctr_start + i as u32; // overflow already checked above
+                let block = ctr_block(iv, ctr); // form block from iv + ctr
+                // xor each element of input chunk (1-16 bytes) with encrypted ctr block
+                let keystream = encrypt_block(&block, round_keys);
 
-        return Ok(output);
-    }
-    
-    // input len below threshold
-    // encrypt serially
-
-    // initialise ctr and output vector
-    let mut ctr = ctr_start;
-    let mut output = Vec::with_capacity(input.len());
-
-    // for each chunk of input...
-    for chunk in input.chunks(16) {
-        let block = ctr_block(iv, ctr); // form block from iv + ctr
-        // xor each element of input chunk (1-16 bytes) with encrypted ctr block
-        let keystream = encrypt_block(&block, round_keys);
-        let ct = xor_chunks(&keystream, chunk);
-        output.extend_from_slice(&ct[..chunk.len()]);
-        // increment ctr and throw error if overflow
-        ctr = ctr.checked_add(1).ok_or(Error::CounterOverflow)?;
+                // XOR bytes of block (last chunk may be lt 16)
+                for j in 0..in_chunk.len() {
+                    out_chunk[j] = keystream[j] ^ in_chunk[j];
+                }
+            });
     }
 
     Ok(output)
@@ -67,11 +64,10 @@ pub fn ctr_core(
 #[cfg(test)]
 mod test_ctr {
     use super::*;
-    use crate::aesp::cipher::Cipher;
-    use crate::aesp::key::Key;
     use crate::aesp::modes::util::test_util::{
         CTR_IV, CTR_START, KEY_128, KEY_192, KEY_256, PLAINTEXT, hex_to_bytes,
     };
+    use crate::{Cipher, Key};
 
     #[test]
     fn aes_ctr_128_encrypt() -> Result<()> {
@@ -85,7 +81,7 @@ mod test_ctr {
 
         let key = Key::try_from_slice(&KEY_128)?;
         let cipher = Cipher::new(&key);
-        let encrypted = ctr_core(&PLAINTEXT, cipher.get_round_keys(), &CTR_IV, CTR_START)?;
+        let encrypted = ctr_core(&PLAINTEXT, cipher.round_keys(), &CTR_IV, CTR_START)?;
 
         assert_eq!(
             expected, encrypted,
@@ -106,7 +102,7 @@ mod test_ctr {
 
         let key = Key::try_from_slice(&KEY_128)?;
         let cipher = Cipher::new(&key);
-        let decrypted = ctr_core(&ciphertext, cipher.get_round_keys(), &CTR_IV, CTR_START)?;
+        let decrypted = ctr_core(&ciphertext, cipher.round_keys(), &CTR_IV, CTR_START)?;
 
         assert_eq!(
             PLAINTEXT.to_vec(),
@@ -128,7 +124,7 @@ mod test_ctr {
 
         let key = Key::try_from_slice(&KEY_192)?;
         let cipher = Cipher::new(&key);
-        let encrypted = ctr_core(&PLAINTEXT, cipher.get_round_keys(), &CTR_IV, CTR_START)?;
+        let encrypted = ctr_core(&PLAINTEXT, cipher.round_keys(), &CTR_IV, CTR_START)?;
 
         assert_eq!(
             expected, encrypted,
@@ -149,7 +145,7 @@ mod test_ctr {
 
         let key = Key::try_from_slice(&KEY_192)?;
         let cipher = Cipher::new(&key);
-        let decrypted = ctr_core(&ciphertext, cipher.get_round_keys(), &CTR_IV, CTR_START)?;
+        let decrypted = ctr_core(&ciphertext, cipher.round_keys(), &CTR_IV, CTR_START)?;
 
         assert_eq!(
             PLAINTEXT.to_vec(),
@@ -171,7 +167,7 @@ mod test_ctr {
 
         let key = Key::try_from_slice(&KEY_256)?;
         let cipher = Cipher::new(&key);
-        let encrypted = ctr_core(&PLAINTEXT, cipher.get_round_keys(), &CTR_IV, CTR_START)?;
+        let encrypted = ctr_core(&PLAINTEXT, cipher.round_keys(), &CTR_IV, CTR_START)?;
 
         assert_eq!(
             expected, encrypted,
@@ -192,7 +188,7 @@ mod test_ctr {
 
         let key = Key::try_from_slice(&KEY_256)?;
         let cipher = Cipher::new(&key);
-        let decrypted = ctr_core(&ciphertext, cipher.get_round_keys(), &CTR_IV, CTR_START)?;
+        let decrypted = ctr_core(&ciphertext, cipher.round_keys(), &CTR_IV, CTR_START)?;
 
         assert_eq!(
             PLAINTEXT.to_vec(),

@@ -1,3 +1,4 @@
+// used for both encryption and decryption
 #[inline(always)]
 pub(crate) fn add_round_key(state: &mut [u8; 16], round_key: &[u8; 16]) {
     for i in 0..16 {

@@ -12,10 +12,11 @@
 //! ## Examples
 //! Below is an example of a string being encrypted under a random key using AES-256-CTR, then decrypted back to plaintext.
 //! ```
+//! # fn main() -> aesp::Result<()> {
 //! use aesp::{Key, Cipher};
 //! 
 //! // generate a random 256-bit key.
-//! let key = Key::rand_key_256().expect("Random key generation failed");
+//! let key = Key::rand_key_256()?;
 //! 
 //! // instantiate a cipher object using that key.
 //! let cipher = Cipher::new(&key);
@@ -25,13 +26,16 @@
 //! 
 //! // encrypt the plaintext bytes using AES-256-CTR.
 //! // note that the key size does not need to be explicitly stated.
-//! let ciphertext = cipher.encrypt_ctr(&plaintext).expect("Counter overflow");
+//! let ciphertext = cipher.encrypt_ctr(&plaintext)?;
 //! 
 //! // decrypt the resultant ciphertext.
-//! let decrypted_ct = cipher.decrypt_ctr(&ciphertext).expect("Counter overflow");
+//! let decrypted_ct = cipher.decrypt_ctr(&ciphertext)?;
 //! 
 //! // round trip results in the same plaintext as the original message.
 //! assert_eq!(plaintext, decrypted_ct);
+//! 
+//! # Ok(())
+//! # }
 //! ```
 
 mod aesp;

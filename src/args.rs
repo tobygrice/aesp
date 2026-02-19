@@ -1,16 +1,6 @@
 use clap::{Args, Parser, Subcommand, ValueEnum};
 use std::path::PathBuf;
 
-// AAD design plan, all optional flags:
-// ENCRYPT:
-//  --aad-file filepath
-//  --aad-hex <hex>
-// 
-// DECRYPT:
-//  --aad-file filepath : writes aad here if present
-//                        if aad present and aad-file not provided, aad is printed to stdout
- 
-
 #[derive(Parser, Debug)]
 #[command(version, about, author, arg_required_else_help = true)]
 pub struct Cli {

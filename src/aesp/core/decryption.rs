@@ -90,9 +90,9 @@ fn mix_columns_inv(state: &mut [u8; 16]) {
 
 #[cfg(test)]
 mod tests {
-    use crate::aesp::cipher::Cipher;
-    use crate::aesp::key::Key;
-    use crate::aesp::error::Result;
+    use crate::Cipher;
+    use crate::Key;
+    use crate::Result;
     use crate::aesp::core::{decryption, encryption};
 
     #[test]
@@ -186,8 +186,8 @@ mod tests {
 
         let key = Key::try_from_slice(&key)?;
         let cipher = Cipher::new(&key);
-        let encrypted = encryption::encrypt_block(&plaintext, cipher.get_round_keys());
-        let decrypted = decryption::decrypt_block(&encrypted, cipher.get_round_keys());
+        let encrypted = encryption::encrypt_block(&plaintext, cipher.round_keys());
+        let decrypted = decryption::decrypt_block(&encrypted, cipher.round_keys());
 
         assert_eq!(
             decrypted, plaintext,

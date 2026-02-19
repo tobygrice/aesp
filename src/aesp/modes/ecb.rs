@@ -4,89 +4,59 @@ use crate::aesp::core::{decrypt_block, encrypt_block};
 use crate::aesp::error::*;
 use crate::aesp::modes::util::PARALLEL_THRESHOLD;
 
-/// Core ECB encryption algorithm.
-/// Encrypts `plaintext` in 16-byte blocks to form ciphertext.
-/// **Assumes `plaintext.len()` is a multiple of 16** (padding must be done by caller).
-pub fn ecb_core_enc(plaintext: &[u8], round_keys: &[[u8; 16]]) -> Result<Vec<u8>> {
-    if plaintext.len() % 16 != 0 {
-        return Err(Error::InvalidPlaintext {
-            len: plaintext.len(),
-            context: "ECB plaintext not a multiple of 16 bytes",
-        });
+/// Core ECB encryption/decryption algorithm.
+/// Crypts in 16-byte blocks to form output.
+/// Input length must be a multiple of 16, InvalidECBInput error if not.
+fn ecb_core<F>(input: &[u8], round_keys: &[[u8; 16]], block_fn: F) -> Result<Vec<u8>>
+where
+    F: Fn(&[u8; 16], &[[u8; 16]]) -> [u8; 16] + Sync + Copy,
+{
+    if input.len() % 16 != 0 {
+        return Err(Error::InvalidECBInput { len: input.len() });
     }
 
-    let mut ciphertext = vec![0u8; plaintext.len()];
+    let mut output = vec![0u8; input.len()];
 
     // encrypt in parallel if feature enabled and size exceeds threshold
-    if plaintext.len() > PARALLEL_THRESHOLD {
-        ciphertext
+    if input.len() > PARALLEL_THRESHOLD {
+        output
             .par_chunks_exact_mut(16)
-            .zip(plaintext.par_chunks_exact(16))
+            .zip(input.par_chunks_exact(16))
             .for_each(|(ct, pt)| {
-                let pt_block: &[u8; 16] = pt.try_into().unwrap(); // exact 16
-                let enc = encrypt_block(pt_block, round_keys);
+                // convert pt into [u8; 16] - safe to unwrap, used chunks_exact(16)
+                let pt_block: &[u8; 16] = pt.try_into().unwrap();
+                let enc = block_fn(pt_block, round_keys);
                 ct.copy_from_slice(&enc);
             });
     } else {
         // encrypt serially
-        for (pt, ct) in plaintext
-            .chunks_exact(16)
-            .zip(ciphertext.chunks_exact_mut(16))
-        {
-            let pt_block: &[u8; 16] = pt.try_into().unwrap(); // exact 16
-            let enc = encrypt_block(pt_block, round_keys);
-            ct.copy_from_slice(&enc);
-        }
+        output
+            .chunks_exact_mut(16)
+            .zip(input.chunks_exact(16))
+            .for_each(|(ct, pt)| {
+                // convert pt into [u8; 16] - safe to unwrap, used chunks_exact(16)
+                let pt_block: &[u8; 16] = pt.try_into().unwrap();
+                let enc = block_fn(pt_block, round_keys);
+                ct.copy_from_slice(&enc);
+            });
     }
 
-    Ok(ciphertext)
+    Ok(output)
 }
 
-/// Core ECB decryption algorithm. Decrypts ciphertext in 16-byte blocks to form plaintext. Assumes ciphertext was PKCS#7 padded.
+pub fn ecb_core_enc(plaintext: &[u8], round_keys: &[[u8; 16]]) -> Result<Vec<u8>> {
+    ecb_core(plaintext, round_keys, encrypt_block)
+}
+
 pub fn ecb_core_dec(ciphertext: &[u8], round_keys: &[[u8; 16]]) -> Result<Vec<u8>> {
-    // ECB ciphertext should (and must) always be a multiple of 16 bytes.
-    if ciphertext.len() % 16 != 0 {
-        return Err(Error::InvalidCiphertext {
-            len: ciphertext.len(),
-            context: "ECB ciphertext not a multiple of 16 bytes",
-        });
-    }
-
-    let mut plaintext = vec![0u8; ciphertext.len()];
-
-    // decrypt in parallel if feature enabled and size exceeds threshold
-    if ciphertext.len() > PARALLEL_THRESHOLD {
-            // decrypt ciphertext in 16-byte blocks
-            ciphertext
-                .par_chunks_exact(16)
-                .zip(plaintext.par_chunks_exact_mut(16))
-                .for_each(|(ct, pt)| {
-                    let ct_block: &[u8; 16] = ct.try_into().unwrap(); // guaranteed exact chunks 16
-                    let dec = decrypt_block(ct_block, round_keys);
-                    pt.copy_from_slice(&dec);
-                });
-    } else {
-        // parallel feature not enabled or input len below threshold
-        // decrypt serially
-        for (ct, pt) in ciphertext
-            .chunks_exact(16)
-            .zip(plaintext.chunks_exact_mut(16))
-        {
-            let ct_block: &[u8; 16] = ct.try_into().unwrap(); // safe unwrap, loop guarantees exact chunks 16
-            let dec = decrypt_block(ct_block, round_keys);
-            pt.copy_from_slice(&dec);
-        }
-    }
-
-    Ok(plaintext)
+    ecb_core(ciphertext, round_keys, decrypt_block)
 }
 
 #[cfg(test)]
 mod test_ecb {
     use super::*;
-    use crate::aesp::cipher::Cipher;
-    use crate::aesp::key::Key;
-    use crate::aesp::modes::util::test_util::{hex_to_bytes, KEY_128, KEY_192, KEY_256, PLAINTEXT};
+    use crate::aesp::modes::util::test_util::{KEY_128, KEY_192, KEY_256, PLAINTEXT, hex_to_bytes};
+    use crate::{Cipher, Key};
 
     #[test]
     fn aes_ecb_128_encrypt() -> Result<()> {
@@ -103,9 +73,12 @@ mod test_ecb {
         let cipher = Cipher::new(&key);
 
         // ECB core now assumes input is already 16-byte aligned and unpadded
-        let encrypted = ecb_core_enc(&PLAINTEXT, cipher.get_round_keys())?;
+        let encrypted = ecb_core_enc(&PLAINTEXT, cipher.round_keys())?;
 
-        assert_eq!(expected, encrypted, "encrypted result does not match expected");
+        assert_eq!(
+            expected, encrypted,
+            "encrypted result does not match expected"
+        );
         Ok(())
     }
 
@@ -121,9 +94,13 @@ mod test_ecb {
 
         let key = Key::try_from_slice(&KEY_128)?;
         let cipher = Cipher::new(&key);
-        let decrypted = ecb_core_dec(&ciphertext, cipher.get_round_keys())?;
+        let decrypted = ecb_core_dec(&ciphertext, cipher.round_keys())?;
 
-        assert_eq!(PLAINTEXT.to_vec(), decrypted, "decrypted result does not match expected");
+        assert_eq!(
+            PLAINTEXT.to_vec(),
+            decrypted,
+            "decrypted result does not match expected"
+        );
         Ok(())
     }
 
@@ -140,9 +117,12 @@ mod test_ecb {
 
         let key = Key::try_from_slice(&KEY_192)?;
         let cipher = Cipher::new(&key);
-        let encrypted = ecb_core_enc(&PLAINTEXT, cipher.get_round_keys())?;
+        let encrypted = ecb_core_enc(&PLAINTEXT, cipher.round_keys())?;
 
-        assert_eq!(expected, encrypted, "encrypted result does not match expected");
+        assert_eq!(
+            expected, encrypted,
+            "encrypted result does not match expected"
+        );
         Ok(())
     }
 
@@ -158,9 +138,13 @@ mod test_ecb {
 
         let key = Key::try_from_slice(&KEY_192)?;
         let cipher = Cipher::new(&key);
-        let decrypted = ecb_core_dec(&ciphertext, cipher.get_round_keys())?;
+        let decrypted = ecb_core_dec(&ciphertext, cipher.round_keys())?;
 
-        assert_eq!(PLAINTEXT.to_vec(), decrypted, "decrypted result does not match expected");
+        assert_eq!(
+            PLAINTEXT.to_vec(),
+            decrypted,
+            "decrypted result does not match expected"
+        );
         Ok(())
     }
 
@@ -177,9 +161,12 @@ mod test_ecb {
 
         let key = Key::try_from_slice(&KEY_256)?;
         let cipher = Cipher::new(&key);
-        let encrypted = ecb_core_enc(&PLAINTEXT, cipher.get_round_keys())?;
+        let encrypted = ecb_core_enc(&PLAINTEXT, cipher.round_keys())?;
 
-        assert_eq!(expected, encrypted, "encrypted result does not match expected");
+        assert_eq!(
+            expected, encrypted,
+            "encrypted result does not match expected"
+        );
         Ok(())
     }
 
@@ -195,9 +182,13 @@ mod test_ecb {
 
         let key = Key::try_from_slice(&KEY_256)?;
         let cipher = Cipher::new(&key);
-        let decrypted = ecb_core_dec(&ciphertext, cipher.get_round_keys())?;
+        let decrypted = ecb_core_dec(&ciphertext, cipher.round_keys())?;
 
-        assert_eq!(PLAINTEXT.to_vec(), decrypted, "decrypted result does not match expected");
+        assert_eq!(
+            PLAINTEXT.to_vec(),
+            decrypted,
+            "decrypted result does not match expected"
+        );
         Ok(())
     }
 }

@@ -3,15 +3,11 @@ use rand::rngs::OsRng;
 
 use crate::aesp::error::*;
 
+/// Generate random 12-byte initialisation vector
 pub(crate) fn random_iv() -> Result<[u8; 12]> {
     let mut iv = [0u8; 12];
     OsRng.try_fill_bytes(&mut iv)?;
     Ok(iv)
-}
-
-#[inline(always)]
-pub(crate) fn xor_words(a: &[u8; 4], b: &[u8; 4]) -> [u8; 4] {
-    [a[0] ^ b[0], a[1] ^ b[1], a[2] ^ b[2], a[3] ^ b[3]]
 }
 
 /// PKCS#7 padding for ECB (16-byte blocks)
@@ -39,6 +35,7 @@ pub(crate) fn unpad(input: &mut Vec<u8>) -> Result<()> {
         });
     }
 
+    // safe unwrap, confirmed non empty
     let pad = *input.last().unwrap() as usize;
     if pad == 0 || pad > 16 || pad > input.len() {
         return Err(Error::InvalidCiphertext {
