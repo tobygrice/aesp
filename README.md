@@ -2,7 +2,7 @@
 
 ## About
 
-An AES library targeting performance through parallelism.
+A pure-software AES library targeting performance through parallelism.
 
 Supported modes are ECB, CTR, and GCM. A CLI binary is also available as an optional feature.
 
