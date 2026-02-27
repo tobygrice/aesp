@@ -1,3 +1,6 @@
+//! Defines the [`Key`] struct, which holds a valid AES key of 128, 192, or 256 bits.
+//! Keys can be randomly generated or constructed from an existing byte slice.
+
 use rand::TryRngCore;
 use rand::rngs::OsRng;
 
