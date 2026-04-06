@@ -95,6 +95,12 @@ Options:
 
 ## Library Usage
 
+Add the library as a dependency using Cargo:
+
+```bash
+cargo add aesp
+```
+
 The API exports two structs:
 
 - `AesKey` -- stores key bytes, used to instantiate an `AesCipher`
