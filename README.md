@@ -95,7 +95,7 @@ Options:
 
 ## Library Usage
 
-Add the library as a dependency using Cargo:
+Add the library as a dependency using `cargo`:
 
 ```bash
 cargo add aesp
